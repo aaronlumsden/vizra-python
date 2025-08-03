@@ -353,6 +353,19 @@ class TrainableCustomMetric(CustomMetric, TrainableMetric):
             return -0.5  # Penalty for failure
 ```
 
+### RL Provider Integration
+
+BaseRLTraining can integrate with external RL services like OpenPipe/ART by overriding the `train_step()` method:
+
+```python
+class ExternalRLTraining(BaseRLTraining):
+    def train_step(self, trajectories: List[Dict[str, Any]]) -> Dict[str, Any]:
+        # Send trajectory data to external RL service
+        # trajectories contain: prompt, response, reward, context
+        external_service.train(trajectories, self.algorithm, self.learning_rate)
+        return self.compute_metrics(trajectories)
+```
+
 ## CLI Commands
 
 Vizra includes a beautiful CLI with Rich styling:
