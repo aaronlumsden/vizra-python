@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m pytest tests/test_cli.py tests/test_evaluation.py tests/test_training.py tests/test_cli_integration.py -v)",
+      "Bash(python -m pytest tests/test_cli_integration.py -v)",
+      "Bash(python -m pytest tests/test_cli_integration.py::TestCLIIntegration::test_eval_run_integration -v)",
+      "Bash(python -m vizra eval:*)"
+    ],
+    "deny": []
+  }
+}

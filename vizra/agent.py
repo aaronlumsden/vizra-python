@@ -1,6 +1,7 @@
 import json
 import os
-from typing import List, Type, Optional, Any
+import re
+from typing import List, Type, Optional, Any, Dict, Tuple
 from litellm import completion
 from .tool import ToolInterface
 from .context import AgentContext
@@ -17,6 +18,11 @@ class BaseAgent:
     instructions_file: Optional[str] = None
     model: str = "gpt-4o"
     tools: List[Type[ToolInterface]] = []
+    
+    @classmethod
+    def _get_tools(cls) -> List[Type[ToolInterface]]:
+        """Get tools from class attribute only."""
+        return cls.tools
     
     @classmethod
     def run(cls, message: str, context: Optional[AgentContext] = None) -> str:
@@ -49,9 +55,28 @@ class BaseAgent:
         # Add user message
         context.add_message("user", message)
         
-        # Initialize tools
-        tool_instances = {tool().definition()["name"]: tool() for tool in cls.tools}
-        tool_definitions = [tool_instance.definition() for tool_instance in tool_instances.values()]
+        # Initialize tools - either from class attribute or discover from tools directory
+        tools_to_use = cls._get_tools()
+        tool_instances = {}
+        tool_definitions = []
+        openai_name_to_instance = {}  # Map OpenAI function names to tool instances
+        
+        # Create tool instances and build mappings
+        for tool_class in tools_to_use:
+            tool_instance = tool_class()
+            
+            # Use class name as the internal key (convert CamelCase to snake_case)
+            class_name = tool_class.__name__
+            # Convert "ChordIdentifierTool" to "chord_identifier_tool"
+            tool_key = ''.join(['_' + c.lower() if c.isupper() else c for c in class_name]).lstrip('_')
+            tool_instances[tool_key] = tool_instance
+            
+            # Handle OpenAI-style tools
+            definition = tool_instance.definition()
+            if definition and "name" in definition:
+                tool_definitions.append(definition)
+                # Keep a mapping from OpenAI function name to tool instance
+                openai_name_to_instance[definition["name"]] = tool_instance
         
         # Main execution loop
         while True:
@@ -112,11 +137,14 @@ class BaseAgent:
                         tool_name = tool_call.function.name
                         
                         try:
-                            if tool_name not in tool_instances:
+                            if tool_name not in openai_name_to_instance:
                                 # Return error as tool result instead of throwing exception
                                 error_result = json.dumps({"error": f"Tool '{tool_name}' not found"})
                                 context.add_tool_result(tool_call.id, error_result)
                                 continue
+                            
+                            # Get tool instance from OpenAI name mapping
+                            tool_instance = openai_name_to_instance[tool_name]
                             
                             # Parse arguments
                             arguments = json.loads(tool_call.function.arguments)
@@ -128,7 +156,6 @@ class BaseAgent:
                                 pass  # Don't let hook errors interrupt execution
                             
                             # Execute tool
-                            tool_instance = tool_instances[tool_name]
                             result = tool_instance.execute(arguments, context)
                             
                             # Call hook after tool result
@@ -173,10 +200,69 @@ class BaseAgent:
                     continue
                 
                 else:
-                    # No tool calls, return the response
-                    content = message_content.content
-                    context.add_message("assistant", content)
-                    return content
+                    # Check for XML tool calls
+                    content = message_content.content or ""
+                    xml_tool_calls = []
+                    
+                    # Check each tool for XML support
+                    for tool_instance in tool_instances.values():
+                        xml_tag = tool_instance.xml_tag
+                        if xml_tag:
+                            # Find all occurrences of this tool's XML tag
+                            pattern = f'<{xml_tag}>(.*?)</{xml_tag}>'
+                            matches = re.findall(pattern, content, re.DOTALL)
+                            
+                            for match_content in matches:
+                                xml_tool_calls.append({
+                                    'tool': tool_instance,
+                                    'tag': xml_tag,
+                                    'content': match_content.strip()
+                                })
+                    
+                    if xml_tool_calls:
+                        # Add assistant message with XML calls
+                        context.add_message("assistant", content)
+                        
+                        # Execute all XML tools
+                        tool_results = []
+                        for i, call in enumerate(xml_tool_calls):
+                            try:
+                                # Parse XML content to arguments
+                                arguments = call['tool'].parse_xml_content(call['content'])
+                                
+                                # Call hook before tool call
+                                try:
+                                    instance.before_tool_call(call['tag'], arguments, context)
+                                except Exception:
+                                    pass
+                                
+                                # Execute tool
+                                result = call['tool'].execute(arguments, context)
+                                
+                                # Call hook after tool result
+                                try:
+                                    instance.after_tool_result(call['tag'], result, context)
+                                except Exception:
+                                    pass
+                                
+                                # Format result with XML tags
+                                tool_results.append(f"<{call['tag']}_result>{result}</{call['tag']}_result>")
+                                
+                            except Exception as e:
+                                # Add error result
+                                tool_results.append(f"<{call['tag']}_error>{str(e)}</{call['tag']}_error>")
+                        
+                        # Add all tool results as a user message
+                        results_message = "Tool results:\n" + "\n".join(tool_results)
+                        context.add_message("user", results_message)
+                        
+                        # Continue the loop for another iteration
+                        continue
+                    
+                    else:
+                        # No tool calls (OpenAI or XML), return the response
+                        context.add_message("assistant", content)
+                        return content
                     
             except Exception as e:
                 raise AgentExecutionError(f"Agent execution failed: {str(e)}")
@@ -191,12 +277,21 @@ class BaseAgent:
         """
         if cls.instructions_file:
             try:
-                # Just use the path as provided by the user
-                # They can use absolute or relative paths based on their project structure
-                with open(cls.instructions_file, 'r', encoding='utf-8') as f:
+                from pathlib import Path
+                
+                # First try the exact path provided
+                instruction_path = Path(cls.instructions_file)
+                
+                # If not found and path is relative, try in prompts folder
+                if not instruction_path.exists() and not instruction_path.is_absolute():
+                    prompts_path = Path('prompts') / cls.instructions_file
+                    if prompts_path.exists():
+                        instruction_path = prompts_path
+                
+                with open(instruction_path, 'r', encoding='utf-8') as f:
                     return f.read().strip()
             except FileNotFoundError:
-                raise AgentExecutionError(f"Instructions file not found: {cls.instructions_file}")
+                raise AgentExecutionError(f"Instructions file not found: {cls.instructions_file} (also checked in prompts/ folder)")
             except Exception as e:
                 raise AgentExecutionError(f"Error reading instructions file: {str(e)}")
         

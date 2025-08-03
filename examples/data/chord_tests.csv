@@ -1,0 +1,21 @@
+prompt,expected_response,test_type,difficulty
+"What chord is C E G?",C major,basic,easy
+"Identify the chord: D F# A",D major,basic,easy
+"What chord contains the notes G B D?",G major,basic,easy
+"Name this chord: F A C",F major,basic,easy
+"What chord is A C# E?",A major,basic,easy
+"Identify the chord: E♭ G B♭",E♭ major,basic,easy
+"What chord has the notes C E♭ G?",C minor,minor,medium
+"Identify: D F A",D minor,minor,medium
+"What chord is F A♭ C?",F minor,minor,medium
+"Name the chord: G B♭ D",G minor,minor,medium
+"What chord contains C E G B♭?",C7,seventh,hard
+"Identify the chord: G B D F",G7,seventh,hard
+"What chord is D F# A C?",D7,seventh,hard
+"Name this chord: A C# E G",A7,seventh,hard
+"What chord has notes C E♭ G B♭?",Cm7,minor_seventh,hard
+"Identify: F A C E",Fmaj7,major_seventh,hard
+"What chord is B D# F# A?",B7,seventh,hard
+"Name the chord with C E G# B",Caug7,augmented,expert
+"What chord contains D♭ F A♭?",D♭ major,flat_keys,medium
+"Identify the chord: G# B# D#",G# major,sharp_keys,medium
