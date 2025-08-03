@@ -71,7 +71,7 @@ from vizra import BaseAgent
 class MyAgent(BaseAgent):
     name = 'my_agent'                    # Unique identifier
     description = 'What this agent does' # Human-readable description
-    instructions = 'Your behavior...'    # System prompt
+    instructions = 'Your behaviour...'    # System prompt
     model = 'gpt-4o'                     # LLM model to use
     tools = [MyTool]                     # List of tool classes
 ```
@@ -112,7 +112,7 @@ response2 = agent_runner.run("Follow-up message")  # Remembers conversation
 
 ### Agent Hooks
 
-Override these methods to add custom behavior:
+Override these methods to add custom behaviour:
 
 ```python
 class MonitoredAgent(BaseAgent):
@@ -226,7 +226,7 @@ prompt,expected_output,expected_keywords
 - **ContainsMetric** - Checks if response contains expected text
 - **NotContainsMetric** - Ensures response doesn't contain specific text
 - **RegexMetric** - Evaluates against regex patterns
-- **SentimentMetric** - Analyzes response sentiment
+- **SentimentMetric** - Analyses response sentiment
 - **LengthMetric** - Validates response length constraints
 - **ToolUsageMetric** - Checks if specific tools were used
 
