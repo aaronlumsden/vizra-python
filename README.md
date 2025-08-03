@@ -297,6 +297,62 @@ Override these attributes:
 
 Override `calculate_reward()` to implement custom reward functions that return values between 0.0 and 1.0.
 
+### Using Metrics in Training
+
+You can reuse evaluation metrics in training by using trainable versions:
+
+```python
+from vizra.evaluation.metrics import TrainableExactMatchMetric, TrainableContainsMetric
+
+class MyTraining(BaseRLTraining):
+    # ... other configuration ...
+    
+    def calculate_reward(self, csv_row_data: dict, agent_response: str) -> float:
+        # Use trainable metrics for consistent evaluation
+        exact_match = TrainableExactMatchMetric('expected_response')
+        contains_metric = TrainableContainsMetric('keywords')
+        
+        # Evaluate using the same logic as evaluations
+        exact_result = exact_match.evaluate(csv_row_data, agent_response)
+        contains_result = contains_metric.evaluate(csv_row_data, agent_response)
+        
+        # Compute rewards from metric results
+        exact_reward = exact_match.compute_reward(exact_result)
+        contains_reward = contains_metric.compute_reward(contains_result)
+        
+        # Combine rewards as needed
+        return (exact_reward + contains_reward) / 2
+```
+
+**Sharing Metrics**: Metrics can be shared between evaluations and training by using the trainable versions (`TrainableExactMatchMetric`, `TrainableContainsMetric`, `TrainableSentimentMetric`) which extend regular metrics with reward computation capabilities.
+
+### Custom Training Metrics
+
+Create custom trainable metrics by inheriting from both your custom metric and `TrainableMetric`:
+
+```python
+from vizra.evaluation.metrics import BaseMetric, TrainableMetric
+
+class CustomMetric(BaseMetric):
+    name = "custom_check"
+    
+    def evaluate(self, row_data: dict, response: str) -> dict:
+        passed = "keyword" in response.lower()
+        return {
+            'passed': passed,
+            'score': 1.0 if passed else 0.0,
+            'details': {'found_keyword': passed}
+        }
+
+class TrainableCustomMetric(CustomMetric, TrainableMetric):
+    def compute_reward(self, result: dict) -> float:
+        # Custom reward logic
+        if result['passed']:
+            return 1.0  # High reward for success
+        else:
+            return -0.5  # Penalty for failure
+```
+
 ## CLI Commands
 
 Vizra includes a beautiful CLI with Rich styling:
