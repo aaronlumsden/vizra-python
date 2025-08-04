@@ -215,6 +215,9 @@ class ARTProvider:
                 # Process response to handle tool calls
                 agent_response = self._process_art_response(response, tools)
                 
+                # Also keep the full response format for metrics that need to see tool usage
+                full_response_for_metrics = self._format_response_for_metrics(response, tools)
+                
                 # DEBUG: Log the response and reward calculation
                 print(f"\n🔍 DEBUG Trajectory {i+1}:")
                 print(f"   Question: {prompt[:100]}...")
@@ -223,8 +226,8 @@ class ARTProvider:
                 print(f"   Processed Response: {agent_response}")
                 print(f"   Expected: {row_data.get('expected_chord', 'N/A')}")
                 
-                # Calculate reward
-                reward = training.calculate_reward(row_data, agent_response)
+                # Calculate reward using full response for tool detection
+                reward = training.calculate_reward(row_data, full_response_for_metrics)
                 print(f"   Reward: {reward}")
                 print(f"   ---")
                 
@@ -335,9 +338,51 @@ class ARTProvider:
                 else:
                     tool_result = f"Tool {tool_name} not found"
                     
-                tool_outputs.append(f"<{tool_name}>{tool_input}</{tool_name}> → {tool_result}")
+                tool_outputs.append(str(tool_result))  # Return just the result, not the full format
             
             # Return the tool outputs as the response
+            return "\n".join(tool_outputs)
+        
+        # Otherwise return the direct response
+        return choice.message.content or ""
+    
+    def _format_response_for_metrics(self, response, tools) -> str:
+        """Format response for metrics that need to see tool usage patterns."""
+        if not response.choices:
+            return ""
+        
+        choice = response.choices[0]
+        
+        # If there are tool calls, format them as XML for tool usage metric
+        if choice.message.tool_calls:
+            tool_outputs = []
+            for tool_call in choice.message.tool_calls:
+                tool_name = tool_call.function.name
+                tool_args = json.loads(tool_call.function.arguments)
+                tool_input = tool_args.get('input', '')
+                
+                # Find the tool and execute it
+                tool_obj = None
+                for tool_class_name, tool_instance in tools.items():
+                    if (hasattr(tool_instance, 'xml_tag') and tool_instance.xml_tag == tool_name) or tool_class_name == tool_name:
+                        tool_obj = tool_instance
+                        break
+                
+                if tool_obj:
+                    if hasattr(tool_obj, 'execute'):
+                        tool_result = tool_obj.execute({'notes_str': tool_input})
+                    elif hasattr(tool_obj, '__call__'):
+                        tool_result = tool_obj(tool_input)
+                    elif hasattr(tool_obj, 'run'):
+                        tool_result = tool_obj.run(tool_input)
+                    else:
+                        tool_result = f"Tool {tool_name} has no execute, __call__, or run method"
+                else:
+                    tool_result = f"Tool {tool_name} not found"
+                    
+                # Format as XML for tool usage detection, but end with just the result
+                tool_outputs.append(f"<{tool_name}>{tool_input}</{tool_name}>\n{tool_result}")
+            
             return "\n".join(tool_outputs)
         
         # Otherwise return the direct response
