@@ -443,10 +443,9 @@ class ARTProvider:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             loop.run_until_complete(
-                self.backend.train_on_trajectories(
-                    self.model,
-                    trajectory_group,
-                    self.TrainConfig()
+                self.model.train(
+                    [trajectory_group],  # train expects a list of trajectory groups
+                    config=self.TrainConfig(learning_rate=training.learning_rate)
                 )
             )
             
@@ -481,14 +480,15 @@ class ARTProvider:
             print(f"   Error: {str(e)}")
             print(f"   This means the model weights were NOT updated this iteration")
             
-            # Return error with empty metrics to avoid crashes
+            # Return actual metrics even if training failed
+            # (we still collected the trajectories successfully)
             metrics = {
-                'avg_reward': 0.0,
-                'min_reward': 0.0,
-                'max_reward': 0.0,
-                'std_reward': 0.0,
-                'num_trajectories': 0,
-                'success_rate': 0.0
+                'avg_reward': float(np.mean(rewards)),
+                'min_reward': float(np.min(rewards)),
+                'max_reward': float(np.max(rewards)),
+                'std_reward': float(np.std(rewards)),
+                'num_trajectories': len(art_trajectories),
+                'success_rate': sum(1 for r in rewards if r > 0.5) / len(rewards) if rewards else 0.0
             }
             
             return {
