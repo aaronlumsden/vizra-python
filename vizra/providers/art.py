@@ -415,8 +415,28 @@ class ARTProvider:
             trajectories=art_trajectories
         )
         
+        # Extract rewards early for debugging
+        rewards = [traj['reward'] for traj in trajectories if 'reward' in traj]
+        if not rewards:
+            rewards = [0.0]
+        
+        # DEBUG: Show reward distribution
+        print(f"\n📊 Reward distribution for this batch:")
+        print(f"   Rewards: {rewards}")
+        print(f"   Count: {len(rewards)}")
+        print(f"   Average: {float(np.mean(rewards)):.3f}")
+        print(f"   Min: {float(np.min(rewards)):.3f}, Max: {float(np.max(rewards)):.3f}")
+            
         # Train model using ART
         try:
+            print(f"\n🎯 Sending {len(art_trajectories)} trajectories to ART for GRPO weight update...")
+            print(f"   Model: {self.model_name}")
+            print(f"   Base model: {self.base_model}")
+            print(f"   Average reward: {float(np.mean(rewards)):.3f}")
+            
+            import time
+            start_time = time.time()
+            
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             loop.run_until_complete(
@@ -427,11 +447,12 @@ class ARTProvider:
                 )
             )
             
+            elapsed = time.time() - start_time
+            print(f"✅ ART weight update completed successfully in {elapsed:.2f} seconds!")
+            print(f"   The model has been updated with GRPO based on the collected trajectories")
+            
             # Calculate metrics from trajectories for compatibility with base class
-            # Extract rewards from the original Vizra trajectories, not ART trajectories
-            rewards = [traj['reward'] for traj in trajectories if 'reward' in traj]
-            if not rewards:
-                rewards = [0.0]
+            # Rewards were already extracted above
             
             import numpy as np
             metrics = {
@@ -454,6 +475,10 @@ class ARTProvider:
             }
             
         except Exception as e:
+            print(f"\n❌ ART weight update FAILED!")
+            print(f"   Error: {str(e)}")
+            print(f"   This means the model weights were NOT updated this iteration")
+            
             # Return error with empty metrics to avoid crashes
             metrics = {
                 'avg_reward': 0.0,
