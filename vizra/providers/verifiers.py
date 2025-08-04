@@ -105,8 +105,7 @@ class VerifiersProvider:
         
         # Create GRPO config with Verifiers' expected parameters
         config = GRPOConfig(
-            # Model configuration
-            model_name_or_path=self.base_model,
+            # Output directory
             output_dir=f"./outputs/{self.model_name}-grpo",
             
             # Training hyperparameters
@@ -138,11 +137,10 @@ class VerifiersProvider:
         
         # Initialize GRPO trainer with custom environment
         self.trainer = GRPOTrainer(
-            config=config,
             model=self.model,
-            tokenizer=self.tokenizer,
-            train_dataset=dataset,
             env=env,  # Pass our Verifiers environment
+            args=config,
+            processing_class=self.tokenizer,
         )
         
         print("✅ GRPO trainer initialized successfully!")
