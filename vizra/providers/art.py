@@ -245,9 +245,9 @@ class ARTProvider:
                                 "content": str(tool_result)
                             })
                 
-                # Create trajectory with simple format for ART 0.3.12
+                # Create trajectory with correct format for ART
                 trajectory = self.Trajectory(
-                    messages=art_messages,
+                    messages_and_choices=art_messages,
                     reward=reward
                 )
                 
