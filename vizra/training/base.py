@@ -33,6 +33,9 @@ class BaseRLTraining:
     batch_size: int = 32
     n_iterations: int = 100
     
+    # Optional provider for custom trajectory collection and training
+    provider: Optional[Any] = None
+    
     def __init__(self):
         """Initialize training."""
         self.agent_class: Optional[type[BaseAgent]] = None
@@ -171,6 +174,16 @@ class BaseRLTraining:
         Returns:
             List of trajectory dictionaries
         """
+        # If provider handles trajectory collection, delegate to it
+        if self.provider and hasattr(self.provider, 'collect_trajectories'):
+            # Pass self to give provider access to agent, metrics, etc.
+            return self.provider.collect_trajectories(
+                training=self,
+                data_rows=data_rows,
+                agent_class=self.agent_class
+            )
+        
+        # Otherwise use default Vizra behavior
         trajectories = []
         
         for i, row_data in enumerate(data_rows):
@@ -253,6 +266,14 @@ class BaseRLTraining:
         Returns:
             dict: Training step results
         """
+        # If provider handles training, delegate to it
+        if self.provider and hasattr(self.provider, 'train_step'):
+            return self.provider.train_step(
+                training=self,
+                trajectories=trajectories
+            )
+        
+        # Otherwise use default behavior
         # Compute metrics
         metrics = self.compute_metrics(trajectories)
         

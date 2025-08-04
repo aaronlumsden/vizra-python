@@ -29,6 +29,7 @@ class TestCLI:
         assert 'Vizra - AI Agent Framework' in result.output
         assert 'eval' in result.output
         assert 'train' in result.output
+        assert 'make' in result.output
         assert 'status' in result.output
     
     def test_status(self):

@@ -30,9 +30,11 @@ def cli(ctx):
 # Import and register subcommands
 from .eval import eval_group
 from .train import train_group
+from .make import make_group
 
 cli.add_command(eval_group)
 cli.add_command(train_group)
+cli.add_command(make_group)
 
 
 # Add a simple status command at the root level

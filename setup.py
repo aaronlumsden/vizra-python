@@ -28,6 +28,8 @@ setup(
     install_requires=[
         "litellm>=1.0.0",
         "openai>=1.0.0",
+        "click>=8.0.0",
+        "rich>=10.0.0",
     ],
     extras_require={
         "dev": [
@@ -36,5 +38,10 @@ setup(
             "black",
             "flake8",
         ]
-    }
+    },
+    entry_points={
+        'console_scripts': [
+            'vizra=vizra.cli:cli',
+        ],
+    },
 )
