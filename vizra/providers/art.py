@@ -232,23 +232,22 @@ class ARTProvider:
                         tool_input = tool_args.get('input', '')
                         
                         if tool_name in tools:
-                            tool_result = tools[tool_name](tool_input)
+                            tool_obj = tools[tool_name]
+                            if hasattr(tool_obj, '__call__'):
+                                tool_result = tool_obj(tool_input)
+                            elif hasattr(tool_obj, 'run'):
+                                tool_result = tool_obj.run(tool_input)
+                            else:
+                                tool_result = f"Tool {tool_name} is not callable"
                             art_messages.append({
                                 "role": "tool",
                                 "tool_call_id": tool_call.id,
                                 "content": str(tool_result)
                             })
                 
-                # Create trajectory with all required fields for ART 0.3.12
-                # ART expects messages_and_choices format
-                messages_and_choices = [{
-                    "messages": art_messages,
-                    "choice": response.choices[0],
-                    "logprobs": response.choices[0].logprobs
-                }]
-                
+                # Create trajectory with simple format for ART 0.3.12
                 trajectory = self.Trajectory(
-                    messages_and_choices=messages_and_choices,
+                    messages=art_messages,
                     reward=reward
                 )
                 
@@ -289,7 +288,13 @@ class ARTProvider:
                 
                 # Execute tool if available
                 if tool_name in tools:
-                    tool_result = tools[tool_name](tool_input)
+                    tool_obj = tools[tool_name]
+                    if hasattr(tool_obj, '__call__'):
+                        tool_result = tool_obj(tool_input)
+                    elif hasattr(tool_obj, 'run'):
+                        tool_result = tool_obj.run(tool_input)
+                    else:
+                        tool_result = f"Tool {tool_name} is not callable"
                     tool_outputs.append(f"<{tool_name}>{tool_input}</{tool_name}> → {tool_result}")
             
             # Return the tool outputs as the response
