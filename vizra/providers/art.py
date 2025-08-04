@@ -347,15 +347,48 @@ class ARTProvider:
                 )
             )
             
+            # Calculate metrics from trajectories for compatibility with base class
+            rewards = [traj.reward for traj in art_trajectories if hasattr(traj, 'reward')]
+            if not rewards:
+                rewards = [0.0]
+            
+            import numpy as np
+            metrics = {
+                'avg_reward': float(np.mean(rewards)),
+                'min_reward': float(np.min(rewards)),
+                'max_reward': float(np.max(rewards)),
+                'std_reward': float(np.std(rewards)),
+                'num_trajectories': len(art_trajectories),
+                'success_rate': sum(1 for r in rewards if r > 0.5) / len(rewards) if rewards else 0.0
+            }
+            
             return {
-                'status': 'success',
+                'iteration': training.current_iteration,
+                'metrics': metrics,
+                'algorithm': 'GRPO',
+                'learning_rate': training.learning_rate,
+                'art_status': 'success',
                 'trajectories_trained': len(art_trajectories),
                 'message': f'Successfully sent {len(art_trajectories)} trajectories to ART for training'
             }
             
         except Exception as e:
+            # Return error with empty metrics to avoid crashes
+            metrics = {
+                'avg_reward': 0.0,
+                'min_reward': 0.0,
+                'max_reward': 0.0,
+                'std_reward': 0.0,
+                'num_trajectories': 0,
+                'success_rate': 0.0
+            }
+            
             return {
-                'status': 'error',
+                'iteration': training.current_iteration,
+                'metrics': metrics,
+                'algorithm': 'GRPO',
+                'learning_rate': training.learning_rate,
+                'art_status': 'error',
                 'error': str(e),
                 'trajectories_attempted': len(art_trajectories)
             }
