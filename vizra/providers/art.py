@@ -213,8 +213,18 @@ class ARTProvider:
                 # Process response to handle tool calls
                 agent_response = self._process_art_response(response, tools)
                 
+                # DEBUG: Log the response and reward calculation
+                print(f"\n🔍 DEBUG Trajectory {i+1}:")
+                print(f"   Question: {prompt[:100]}...")
+                print(f"   Raw Response: {response.choices[0].message.content}")
+                print(f"   Tool Calls: {response.choices[0].message.tool_calls}")
+                print(f"   Processed Response: {agent_response}")
+                print(f"   Expected: {row_data.get('expected_chord', 'N/A')}")
+                
                 # Calculate reward
                 reward = training.calculate_reward(row_data, agent_response)
+                print(f"   Reward: {reward}")
+                print(f"   ---")
                 
                 # Create ART trajectory
                 art_messages = messages.copy()
