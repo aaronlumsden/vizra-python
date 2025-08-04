@@ -116,7 +116,7 @@ class VerifiersProvider:
             
             # GRPO specific
             beta=0.1,  # KL penalty coefficient
-            num_generation_per_prompt=1,
+            num_generations=2,  # GRPO requires at least 2
             max_new_tokens=128,
             temperature=0.7,
             
