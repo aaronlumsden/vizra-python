@@ -80,6 +80,16 @@ class VerifiersProvider:
         data_rows = df.to_dict('records')
         print(f"📊 Loaded {len(data_rows)} training examples from {csv_path.name}")
         
+        # Load evaluation data if available
+        eval_data_rows = None
+        eval_csv_path = csv_path.parent / "chord_identifier_eval.csv"
+        if eval_csv_path.exists():
+            eval_df = pd.read_csv(eval_csv_path)
+            eval_data_rows = eval_df.to_dict('records')
+            print(f"📊 Loaded {len(eval_data_rows)} evaluation examples from {eval_csv_path.name}")
+        else:
+            print("⚠️  No evaluation dataset found, using training data for evaluation")
+        
         # Initialize model and tokenizer
         print("\n🔧 Loading model and tokenizer...")
         self.tokenizer = AutoTokenizer.from_pretrained(self.base_model)
@@ -94,7 +104,7 @@ class VerifiersProvider:
         
         # Create Verifiers environment wrapper
         print("\n🔧 Initializing Verifiers environment...")
-        env = VizraVerifiersEnv(training, data_rows)
+        env = VizraVerifiersEnv(training, data_rows, eval_data_rows)
         
         # Configure GRPO training
         print(f"\n🚀 Initializing GRPO trainer...")
@@ -305,10 +315,11 @@ class VizraVerifiersEnv:
     Implements the minimal interface required by Verifiers.
     """
     
-    def __init__(self, training, data_rows):
+    def __init__(self, training, data_rows, eval_data_rows=None):
         """Initialize environment with training configuration."""
         self.training = training
         self.data_rows = data_rows
+        self.eval_data_rows = eval_data_rows if eval_data_rows is not None else data_rows
         self.current_idx = 0
         
         # Get tools from agent
@@ -345,6 +356,31 @@ class VizraVerifiersEnv:
             self.dataset = Dataset.from_list(dataset_entries)
         
         return self.dataset
+    
+    def get_eval_dataset(self):
+        """Return the evaluation dataset for GRPOTrainer."""
+        if not hasattr(self, 'eval_dataset') or self.eval_dataset is None:
+            # Create eval dataset if not already created
+            from datasets import Dataset
+            
+            # Convert eval data to prompts
+            dataset_entries = []
+            for row in self.eval_data_rows:
+                trajectory = self.training.prepare_trajectory(row)
+                prompt = trajectory['prompt']
+                
+                # Create entry with prompt
+                entry = {
+                    'prompt': prompt,
+                    'query': prompt,  # Some trainers expect 'query'
+                    'input': prompt,  # Some expect 'input'
+                    'expected_output': row.get('expected_chord', row.get('expected_output', '')),
+                }
+                dataset_entries.append(entry)
+            
+            self.eval_dataset = Dataset.from_list(dataset_entries)
+        
+        return self.eval_dataset
     
     def reset(self, seed=None):
         """Reset environment and return initial observation."""
