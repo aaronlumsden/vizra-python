@@ -440,6 +440,23 @@ class ARTProvider:
             import time
             start_time = time.time()
             
+            # Ensure model is registered before training
+            if not self._registered:
+                print(f"   Registering model with ART backend...")
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    loop.run_until_complete(self.model.register(self.backend))
+                    self._registered = True
+                    print(f"   ✅ Model registered successfully")
+                except Exception as e:
+                    print(f"   ⚠️  Model registration failed: {e}")
+                    # Continue anyway if we have external inference
+                    if self.inference_base_url:
+                        print(f"   Continuing with external inference at {self.inference_base_url}")
+                    else:
+                        raise
+            
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             loop.run_until_complete(
