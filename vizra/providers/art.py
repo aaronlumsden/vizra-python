@@ -308,7 +308,7 @@ class ARTProvider:
         # Otherwise return the direct response
         return choice.message.content or ""
     
-    def train_step(self, trajectories: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def train_step(self, training, trajectories: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
         Execute a training step using collected trajectories.
         
