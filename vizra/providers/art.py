@@ -179,11 +179,13 @@ class ARTProvider:
                 # Format tools for ART
                 formatted_tools = []
                 for tool_name, tool_func in tools.items():
+                    # Use the tool's xml_tag if available, otherwise use class name
+                    function_name = getattr(tool_func, 'xml_tag', tool_name)
                     formatted_tools.append({
                         "type": "function",
                         "function": {
-                            "name": tool_name,
-                            "description": getattr(tool_func, '__doc__', f"Tool: {tool_name}"),
+                            "name": function_name,
+                            "description": getattr(tool_func, '__doc__', f"Tool: {function_name}"),
                             "parameters": {
                                 "type": "object",
                                 "properties": {
@@ -242,23 +244,35 @@ class ARTProvider:
                 # Add tool responses if any
                 if response.choices[0].message.tool_calls:
                     for tool_call in response.choices[0].message.tool_calls:
-                        tool_name = tool_call.function.name
+                        called_name = tool_call.function.name
                         tool_args = json.loads(tool_call.function.arguments)
                         tool_input = tool_args.get('input', '')
                         
-                        if tool_name in tools:
-                            tool_obj = tools[tool_name]
-                            if hasattr(tool_obj, '__call__'):
+                        # Find the tool by matching xml_tag or class name
+                        tool_obj = None
+                        for tool_class_name, tool_instance in tools.items():
+                            if (hasattr(tool_instance, 'xml_tag') and tool_instance.xml_tag == called_name) or tool_class_name == called_name:
+                                tool_obj = tool_instance
+                                break
+                        
+                        if tool_obj:
+                            # For Vizra tools, use the execute method with proper arguments
+                            if hasattr(tool_obj, 'execute'):
+                                tool_result = tool_obj.execute({'notes_str': tool_input})
+                            elif hasattr(tool_obj, '__call__'):
                                 tool_result = tool_obj(tool_input)
                             elif hasattr(tool_obj, 'run'):
                                 tool_result = tool_obj.run(tool_input)
                             else:
-                                tool_result = f"Tool {tool_name} is not callable"
-                            art_messages.append({
-                                "role": "tool",
-                                "tool_call_id": tool_call.id,
-                                "content": str(tool_result)
-                            })
+                                tool_result = f"Tool {called_name} has no execute, __call__, or run method"
+                        else:
+                            tool_result = f"Tool {called_name} not found"
+                            
+                        art_messages.append({
+                            "role": "tool",
+                            "tool_call_id": tool_call.id,
+                            "content": str(tool_result)
+                        })
                 
                 # Create trajectory with correct format for ART
                 trajectory = self.Trajectory(
@@ -301,16 +315,27 @@ class ARTProvider:
                 tool_args = json.loads(tool_call.function.arguments)
                 tool_input = tool_args.get('input', '')
                 
-                # Execute tool if available
-                if tool_name in tools:
-                    tool_obj = tools[tool_name]
-                    if hasattr(tool_obj, '__call__'):
+                # Find the tool by matching xml_tag or class name
+                tool_obj = None
+                for tool_class_name, tool_instance in tools.items():
+                    if (hasattr(tool_instance, 'xml_tag') and tool_instance.xml_tag == tool_name) or tool_class_name == tool_name:
+                        tool_obj = tool_instance
+                        break
+                
+                if tool_obj:
+                    # For Vizra tools, use the execute method with proper arguments
+                    if hasattr(tool_obj, 'execute'):
+                        tool_result = tool_obj.execute({'notes_str': tool_input})
+                    elif hasattr(tool_obj, '__call__'):
                         tool_result = tool_obj(tool_input)
                     elif hasattr(tool_obj, 'run'):
                         tool_result = tool_obj.run(tool_input)
                     else:
-                        tool_result = f"Tool {tool_name} is not callable"
-                    tool_outputs.append(f"<{tool_name}>{tool_input}</{tool_name}> → {tool_result}")
+                        tool_result = f"Tool {tool_name} has no execute, __call__, or run method"
+                else:
+                    tool_result = f"Tool {tool_name} not found"
+                    
+                tool_outputs.append(f"<{tool_name}>{tool_input}</{tool_name}> → {tool_result}")
             
             # Return the tool outputs as the response
             return "\n".join(tool_outputs)
