@@ -95,7 +95,11 @@ class TrainingRunner:
             raise ValueError(f"Training '{training_name}' not found. Available: {available}")
         
         train_class = self.trainings[training_name]
+        print(f"🔍 Found training class: {train_class}")
+        print(f"🔍 Creating instance of {train_class.__name__}...")
         training = train_class()
+        print(f"🔍 Instance created: {training}")
+        print(f"🔍 Provider is: {getattr(training, 'provider', 'No provider attribute')}")
         return training.run()
     
     def run_all_trainings(self) -> Dict[str, Any]:
