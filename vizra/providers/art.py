@@ -48,22 +48,43 @@ class ARTProvider:
         self.TrajectoryGroup = TrajectoryGroup
         
         # Initialize ART backend and model
+        print(f"🔧 Creating ART backend and model with name: '{model_name}'")
         self.backend = LocalBackend()
-        self.model = TrainableModel(
-            name=model_name,
-            project=project,
-            base_model=base_model
-        )
+        print(f"🔧 Backend created: {self.backend}")
         
-        # Register model with backend
-        self._registered = False
         try:
+            self.model = TrainableModel(
+                name=model_name,
+                project=project,
+                base_model=base_model
+            )
+            print(f"🔧 ART model created: {self.model}")
+            print(f"🔧 Model attributes: name={getattr(self.model, 'name', 'N/A')}, base={getattr(self.model, 'base_model', 'N/A')}")
+        except Exception as e:
+            print(f"❌ Error creating TrainableModel: {e}")
+            raise
+        
+        # Try registering immediately with better error handling
+        self._registered = False
+        print(f"🔧 Attempting immediate registration...")
+        try:
+            import asyncio
             loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
             loop.run_until_complete(self.model.register(self.backend))
             self._registered = True
-            print(f"✅ ART model '{model_name}' registered successfully")
+            print(f"✅ Model registered successfully!")
         except Exception as e:
-            print(f"⚠️  Warning: Failed to register ART model: {e}")
+            error_msg = str(e)
+            print(f"⚠️  Registration error: {error_msg}")
+            
+            # Special handling for known errors
+            if "aimv2" in error_msg:
+                print("ℹ️  Ignoring aimv2 conflict - this is a known issue with transformers version")
+                # Don't mark as registered yet - we'll handle it during trajectory collection
+            elif "already registered" in error_msg or "already exists" in error_msg:
+                print("ℹ️  Model appears to already be registered")
+                self._registered = True
     
     def collect_trajectories(self, training, data_rows: List[Dict[str, Any]], agent_class) -> List[Dict[str, Any]]:
         """
@@ -91,12 +112,111 @@ class ARTProvider:
         """Async implementation of trajectory collection."""
         trajectories = []
         
+        # First check if ART server is accessible
+        import aiohttp
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get("http://localhost:7999/v1/models") as resp:
+                    if resp.status == 200:
+                        models = await resp.json()
+                        print(f"🔍 ART server models available: {models}")
+                    else:
+                        print(f"⚠️  ART server returned status {resp.status}")
+        except Exception as e:
+            print(f"⚠️  Could not connect to ART server at localhost:7999: {e}")
+        
+        # Ensure model is registered
+        if not self._registered:
+            print("⚠️  Model not registered, attempting registration...")
+            try:
+                await self.model.register(self.backend)
+                self._registered = True
+                print("✅ Model registered successfully")
+            except Exception as e:
+                error_str = str(e)
+                print(f"🔍 Registration error details: {error_str}")
+                
+                # Handle various known error cases
+                if "already exists" in error_str or "already used" in error_str or "already registered" in error_str:
+                    print("ℹ️  Model appears to be already registered, proceeding...")
+                    self._registered = True
+                elif "aimv2" in error_str:
+                    print("ℹ️  Ignoring aimv2 conflict, attempting to proceed...")
+                    self._registered = True
+                elif "not yet available" in error_str:
+                    # This suggests we need to register differently
+                    print("⚠️  Model not available, registration may have failed")
+                    raise RuntimeError(f"Failed to register model: {e}")
+                else:
+                    raise RuntimeError(f"Failed to register model: {e}")
+        
         # Get ART's OpenAI client
-        client = self.model.openai_client()
+        client = None
+        try:
+            print("🔍 Getting OpenAI client from model...")
+            client = self.model.openai_client()
+            print("✅ OpenAI client obtained successfully")
+        except Exception as e:
+            print(f"❌ Failed to get OpenAI client: {e}")
+            
+            # Try different approaches based on the error
+            if "not yet available" in str(e):
+                print("🔧 Model not available, trying registration approaches...")
+                
+                # Approach 1: Try force registration
+                if not self._registered:
+                    print("  1️⃣ Attempting force registration...")
+                    try:
+                        await self.model.register(self.backend)
+                        self._registered = True
+                        client = self.model.openai_client()
+                        print("  ✅ Force registration successful")
+                    except Exception as e2:
+                        print(f"  ❌ Force registration failed: {e2}")
+                
+                # Approach 2: Try to get the client directly from backend
+                if client is None:
+                    print("  2️⃣ Trying to get client from backend...")
+                    try:
+                        # Check if backend has a method to get client
+                        if hasattr(self.backend, 'get_client'):
+                            client = self.backend.get_client(self.model_name)
+                            print("  ✅ Got client from backend")
+                        elif hasattr(self.backend, 'openai_client'):
+                            client = self.backend.openai_client()
+                            print("  ✅ Got OpenAI client from backend")
+                    except Exception as e3:
+                        print(f"  ❌ Backend client approach failed: {e3}")
+                
+                # Approach 3: Create a new model instance
+                if client is None:
+                    print("  3️⃣ Trying to create a new model instance...")
+                    try:
+                        # Import here to avoid circular imports
+                        from art import TrainableModel
+                        temp_model = TrainableModel(
+                            name=f"{self.model_name}-temp",
+                            project=self.project,
+                            base_model=self.base_model
+                        )
+                        await temp_model.register(self.backend)
+                        client = temp_model.openai_client()
+                        self.model = temp_model  # Use the new model
+                        self._registered = True
+                        print("  ✅ New model instance created and registered")
+                    except Exception as e4:
+                        print(f"  ❌ New model instance failed: {e4}")
+            
+            if client is None:
+                raise RuntimeError(f"Could not obtain OpenAI client after all attempts. Original error: {e}")
         
         # Get agent configuration
         instructions = agent_class._get_instructions()
         tools = agent_class._get_tools()
+        
+        # Debug: Check model info
+        print(f"🔍 Model inference name: {getattr(self.model, 'inference_model_name', 'Not set')}")
+        print(f"🔍 Model base: {self.base_model}")
         
         for i, row_data in enumerate(data_rows):
             print(f"\r[{i+1}/{len(data_rows)}] Collecting trajectories with ART...", end='', flush=True)
