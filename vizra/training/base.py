@@ -297,6 +297,11 @@ class BaseRLTraining:
         Returns:
             dict: Training results and metrics
         """
+        # Delegate entirely to provider if it supports full training ownership
+        if self.provider and hasattr(self.provider, 'run_training'):
+            return self.provider.run_training(self)
+        
+        # Otherwise continue with default Vizra training logic
         if not self.csv_path:
             raise ValueError(f"csv_path must be set in {self.__class__.__name__}")
         
