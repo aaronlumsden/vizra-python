@@ -218,11 +218,16 @@ class ARTProvider:
                 
                 # Create ART trajectory
                 art_messages = messages.copy()
-                art_messages.append({
+                assistant_msg = {
                     "role": "assistant",
-                    "content": response.choices[0].message.content,
-                    "tool_calls": response.choices[0].message.tool_calls
-                })
+                    "content": response.choices[0].message.content or ""
+                }
+                
+                # Only add tool_calls if they exist
+                if response.choices[0].message.tool_calls:
+                    assistant_msg["tool_calls"] = response.choices[0].message.tool_calls
+                
+                art_messages.append(assistant_msg)
                 
                 # Add tool responses if any
                 if response.choices[0].message.tool_calls:
