@@ -420,6 +420,9 @@ class ARTProvider:
         if not rewards:
             rewards = [0.0]
         
+        # Import numpy for calculations
+        import numpy as np
+        
         # DEBUG: Show reward distribution
         print(f"\n📊 Reward distribution for this batch:")
         print(f"   Rewards: {rewards}")
@@ -454,7 +457,6 @@ class ARTProvider:
             # Calculate metrics from trajectories for compatibility with base class
             # Rewards were already extracted above
             
-            import numpy as np
             metrics = {
                 'avg_reward': float(np.mean(rewards)),
                 'min_reward': float(np.min(rewards)),
