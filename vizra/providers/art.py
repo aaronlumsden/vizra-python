@@ -81,6 +81,16 @@ class ARTProvider:
                 # Registration might fail but we can still proceed
                 pass
     
+    def _normalize_tools(self, tools):
+        """Convert tools to a consistent dictionary format."""
+        if isinstance(tools, dict):
+            return tools
+        elif isinstance(tools, list):
+            # Convert list to dict - assume tools are functions with names
+            return {getattr(tool, '__name__', f'tool_{i}'): tool for i, tool in enumerate(tools)}
+        else:
+            return {}
+    
     def collect_trajectories(self, training, data_rows: List[Dict[str, Any]], agent_class) -> List[Dict[str, Any]]:
         """
         Collect trajectories using ART's model while respecting agent configuration.
@@ -134,7 +144,8 @@ class ARTProvider:
         
         # Get agent configuration
         instructions = agent_class._get_instructions()
-        tools = agent_class._get_tools()
+        raw_tools = agent_class._get_tools()
+        tools = self._normalize_tools(raw_tools)  # Normalize to dict format
         
         for i, row_data in enumerate(data_rows):
             print(f"\r[{i+1}/{len(data_rows)}] Collecting trajectories...", end='', flush=True)
@@ -234,7 +245,7 @@ class ARTProvider:
         print()  # New line after progress
         return trajectories
     
-    def _process_art_response(self, response, tools: Dict[str, Any]) -> str:
+    def _process_art_response(self, response, tools) -> str:
         """Process ART response to extract final answer, handling tool calls."""
         if not response.choices:
             return ""
