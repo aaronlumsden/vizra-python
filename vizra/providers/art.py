@@ -86,8 +86,29 @@ class ARTProvider:
         if isinstance(tools, dict):
             return tools
         elif isinstance(tools, list):
-            # Convert list to dict - assume tools are functions with names
-            return {getattr(tool, '__name__', f'tool_{i}'): tool for i, tool in enumerate(tools)}
+            # Convert list to dict - handle both classes and instances
+            normalized = {}
+            for i, tool in enumerate(tools):
+                # Get tool name
+                if hasattr(tool, '__name__'):
+                    tool_name = tool.__name__
+                elif hasattr(tool, '__class__'):
+                    tool_name = tool.__class__.__name__
+                else:
+                    tool_name = f'tool_{i}'
+                
+                # If it's a class, instantiate it
+                if isinstance(tool, type):
+                    try:
+                        tool_instance = tool()
+                        normalized[tool_name] = tool_instance
+                    except Exception as e:
+                        print(f"Warning: Could not instantiate tool {tool_name}: {e}")
+                        continue
+                else:
+                    # It's already an instance
+                    normalized[tool_name] = tool
+            return normalized
         else:
             return {}
     
@@ -218,10 +239,16 @@ class ARTProvider:
                                 "content": str(tool_result)
                             })
                 
-                # Create trajectory with all required fields
+                # Create trajectory with all required fields for ART 0.3.12
+                # ART expects messages_and_choices format
+                messages_and_choices = [{
+                    "messages": art_messages,
+                    "choice": response.choices[0],
+                    "logprobs": response.choices[0].logprobs
+                }]
+                
                 trajectory = self.Trajectory(
-                    messages=art_messages,
-                    logprobs=[c.logprobs for c in response.choices],
+                    messages_and_choices=messages_and_choices,
                     reward=reward
                 )
                 
