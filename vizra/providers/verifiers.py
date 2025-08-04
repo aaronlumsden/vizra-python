@@ -96,10 +96,6 @@ class VerifiersProvider:
         print("\n🔧 Initializing Verifiers environment...")
         env = VizraVerifiersEnv(training, data_rows)
         
-        # Prepare dataset for Verifiers
-        print("\n📝 Preparing dataset for GRPO...")
-        dataset = self._prepare_dataset(training, data_rows)
-        
         # Configure GRPO training
         print(f"\n🚀 Initializing GRPO trainer...")
         
@@ -300,34 +296,6 @@ class VerifiersProvider:
             'training_mode': 'placeholder',
             'note': 'Verifiers integration failed - ran in placeholder mode'
         }
-    
-    def _prepare_dataset(self, training, data_rows):
-        """Prepare dataset in format expected by Verifiers GRPOTrainer."""
-        from datasets import Dataset
-        
-        # Convert data to prompts
-        dataset_entries = []
-        for row in data_rows:
-            trajectory = training.prepare_trajectory(row)
-            prompt = trajectory['prompt']
-            
-            # Create entry with prompt and expected output for reference
-            entry = {
-                'prompt': prompt,
-                'query': prompt,  # Some trainers expect 'query'
-                'input': prompt,  # Some expect 'input'
-                'expected_output': row.get('expected_chord', row.get('expected_output', '')),
-            }
-            dataset_entries.append(entry)
-        
-        return Dataset.from_list(dataset_entries)
-
-
-        # Save the trained model
-        if hasattr(self.trainer, 'save_model'):
-            output_dir = f"./outputs/{self.model_name}-grpo/final"
-            print(f"\n💾 Saving trained model to {output_dir}")
-            self.trainer.save_model(output_dir)
 
 
 class VizraVerifiersEnv:
@@ -349,6 +317,34 @@ class VizraVerifiersEnv:
         
         # Get agent instructions
         self.instructions = training.agent_class._get_instructions()
+        
+        # Store dataset for GRPOTrainer
+        self.dataset = None
+    
+    def get_dataset(self):
+        """Return the dataset for GRPOTrainer."""
+        if self.dataset is None:
+            # Create dataset if not already created
+            from datasets import Dataset
+            
+            # Convert data to prompts
+            dataset_entries = []
+            for row in self.data_rows:
+                trajectory = self.training.prepare_trajectory(row)
+                prompt = trajectory['prompt']
+                
+                # Create entry with prompt
+                entry = {
+                    'prompt': prompt,
+                    'query': prompt,  # Some trainers expect 'query'
+                    'input': prompt,  # Some expect 'input'
+                    'expected_output': row.get('expected_chord', row.get('expected_output', '')),
+                }
+                dataset_entries.append(entry)
+            
+            self.dataset = Dataset.from_list(dataset_entries)
+        
+        return self.dataset
     
     def reset(self, seed=None):
         """Reset environment and return initial observation."""
