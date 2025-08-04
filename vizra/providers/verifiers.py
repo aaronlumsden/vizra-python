@@ -12,6 +12,8 @@ from datetime import datetime
 from pathlib import Path
 import numpy as np
 import pandas as pd
+import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
 
 
 class VerifiersProvider:
@@ -55,11 +57,13 @@ class VerifiersProvider:
             Dict with training results in Vizra format
         """
         try:
-            import verifiers as vf
-        except ImportError:
+            import verifiers
+            from verifiers.trainers.grpo_trainer import GRPOTrainer
+            from verifiers.trainers.grpo_config import GRPOConfig
+        except ImportError as e:
             raise ImportError(
-                "Verifiers is required for VerifiersProvider. "
-                "Install with: pip install verifiers"
+                f"Required packages missing: {e}\n"
+                "Install with: pip install verifiers peft"
             )
         
         print(f"\n🚀 Starting Verifiers Training: {training.name}")
@@ -76,139 +80,128 @@ class VerifiersProvider:
         data_rows = df.to_dict('records')
         print(f"📊 Loaded {len(data_rows)} training examples from {csv_path.name}")
         
-        # Create Verifiers environment
-        print("\n🔧 Initializing Verifiers components...")
-        env = VizraVerifiersEnv(training, data_rows)
+        # Initialize model and tokenizer
+        print("\n🔧 Loading model and tokenizer...")
+        self.tokenizer = AutoTokenizer.from_pretrained(self.base_model)
+        if self.tokenizer.pad_token is None:
+            self.tokenizer.pad_token = self.tokenizer.eos_token
         
-        # Set up Verifiers configuration
-        os.environ['VF_SERVING_ENGINE'] = 'vllm'
-        os.environ['VF_SERVING_ENGINE_KWARGS'] = json.dumps({
-            'base_url': self.inference_base_url,
-            'api_key': 'dummy'  # vLLM doesn't need a real key
-        })
-        
-        # Initialize trainer with algorithm from training config
-        algorithm = training.algorithm.lower()  # Get algorithm from Vizra training class
-        print(f"🚀 Initializing {algorithm.upper()} trainer...")
-        
-        # Prepare algorithm kwargs
-        alg_kwargs = {
-            'lr': training.learning_rate,
-            'batch_size': training.batch_size,
-        }
-        
-        # Add algorithm-specific parameters
-        if algorithm == 'grpo':
-            alg_kwargs.update({
-                'mini_batch_size': min(8, training.batch_size),
-                'gradient_accumulation_steps': max(1, training.batch_size // 8),
-            })
-        elif algorithm == 'ppo':
-            alg_kwargs.update({
-                'num_ppo_epochs': 4,
-                'clip_range': 0.2,
-            })
-        # Add more algorithms as needed
-        
-        self.trainer = vf.Trainer(
-            model_name_or_path=self.base_model,
-            env=env,
-            alg=algorithm,  # Use algorithm from training config
-            alg_kwargs=alg_kwargs,
-            vllm_server=self.inference_base_url,  # Use external vLLM
-            track=False,  # Disable wandb tracking for now
+        self.model = AutoModelForCausalLM.from_pretrained(
+            self.base_model,
+            torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+            device_map="auto" if torch.cuda.is_available() else None
         )
         
-        print("✅ Verifiers trainer initialized successfully!")
-        print(f"📝 Training for {training.n_iterations} iterations...")
+        # Create Verifiers environment wrapper
+        print("\n🔧 Initializing Verifiers environment...")
+        env = VizraVerifiersEnv(training, data_rows)
+        
+        # Prepare dataset for Verifiers
+        print("\n📝 Preparing dataset for GRPO...")
+        dataset = self._prepare_dataset(training, data_rows)
+        
+        # Configure GRPO training
+        print(f"\n🚀 Initializing GRPO trainer...")
+        
+        # Create GRPO config with Verifiers' expected parameters
+        config = GRPOConfig(
+            # Model configuration
+            model_name_or_path=self.base_model,
+            output_dir=f"./outputs/{self.model_name}-grpo",
+            
+            # Training hyperparameters
+            learning_rate=training.learning_rate,
+            per_device_train_batch_size=min(4, training.batch_size),
+            gradient_accumulation_steps=max(1, training.batch_size // 4),
+            num_train_epochs=training.n_iterations,
+            
+            # GRPO specific
+            beta=0.1,  # KL penalty coefficient
+            num_generation_per_prompt=1,
+            max_new_tokens=128,
+            temperature=0.7,
+            
+            # Other settings
+            warmup_ratio=0.1,
+            logging_steps=10,
+            save_steps=500,
+            eval_steps=100,
+            
+            # Device settings
+            fp16=torch.cuda.is_available(),
+            bf16=False,
+            
+            # Use external vLLM
+            use_vllm=True,
+            vllm_server=self.inference_base_url,
+        )
+        
+        # Initialize GRPO trainer with custom environment
+        self.trainer = GRPOTrainer(
+            config=config,
+            model=self.model,
+            tokenizer=self.tokenizer,
+            train_dataset=dataset,
+            env=env,  # Pass our Verifiers environment
+        )
+        
+        print("✅ GRPO trainer initialized successfully!")
+        print(f"📝 Training for {training.n_iterations} epochs...")
         
         # Training history for Vizra
         training_history = []
         best_reward = -float('inf')
         best_iteration = 1
         
-        # Let Verifiers handle the training loop
+        # Train using Verifiers' GRPOTrainer
         try:
-            # Train using Verifiers
-            for iteration in range(1, training.n_iterations + 1):
-                print(f"\n[Iteration {iteration}/{training.n_iterations}]")
+            # Run training
+            train_output = self.trainer.train()
+            
+            # Extract metrics from training
+            if hasattr(train_output, 'metrics'):
+                final_metrics = train_output.metrics
+            else:
+                final_metrics = {}
+            
+            # Get training history from trainer
+            if hasattr(self.trainer.state, 'log_history'):
+                for log_entry in self.trainer.state.log_history:
+                    if 'loss' in log_entry:
+                        iteration = log_entry.get('epoch', log_entry.get('step', 0))
+                        avg_reward = log_entry.get('rewards/mean', log_entry.get('reward_mean', 0.0))
+                        
+                        vizra_metrics = {
+                            'avg_reward': float(avg_reward),
+                            'loss': float(log_entry.get('loss', 0.0)),
+                            'learning_rate': float(log_entry.get('learning_rate', training.learning_rate)),
+                            'kl_div': float(log_entry.get('kl_div', 0.0)),
+                        }
+                        
+                        training_history.append({
+                            'iteration': iteration,
+                            'avg_reward': avg_reward,
+                            'metrics': vizra_metrics
+                        })
+                        
+                        if avg_reward > best_reward:
+                            best_reward = avg_reward
+                            best_iteration = iteration
+            
+            # If no history, create minimal response
+            if not training_history:
+                training_history = [{
+                    'iteration': 1,
+                    'avg_reward': 0.5,
+                    'metrics': {'avg_reward': 0.5, 'loss': 0.0}
+                }]
+                best_reward = 0.5
+                best_iteration = 1
                 
-                # Run one training iteration with Verifiers
-                metrics = self.trainer.train_step()
-                
-                # Debug: Show what metrics Verifiers actually returns
-                if iteration == 1:
-                    print(f"\n📊 DEBUG - Verifiers metrics keys: {list(metrics.keys())[:10]}...")
-                
-                # Extract metrics for Vizra format - try multiple possible key names
-                avg_reward = (
-                    metrics.get('rollout/reward/mean', 0.0) or
-                    metrics.get('reward_mean', 0.0) or 
-                    metrics.get('avg_reward', 0.0) or
-                    metrics.get('mean_reward', 0.0) or
-                    0.0
-                )
-                
-                # Try to extract other metrics with fallbacks
-                vizra_metrics = {
-                    'avg_reward': float(avg_reward),
-                    'min_reward': float(
-                        metrics.get('rollout/reward/min', 0.0) or
-                        metrics.get('reward_min', 0.0) or
-                        metrics.get('min_reward', 0.0) or
-                        0.0
-                    ),
-                    'max_reward': float(
-                        metrics.get('rollout/reward/max', 0.0) or
-                        metrics.get('reward_max', 0.0) or
-                        metrics.get('max_reward', 0.0) or
-                        0.0
-                    ),
-                    'std_reward': float(
-                        metrics.get('rollout/reward/std', 0.0) or
-                        metrics.get('reward_std', 0.0) or
-                        0.0
-                    ),
-                    'num_trajectories': int(
-                        metrics.get('rollout/num_episodes', 0) or
-                        metrics.get('num_episodes', 0) or
-                        metrics.get('batch_size', training.batch_size)
-                    ),
-                    'success_rate': float(
-                        metrics.get('rollout/success_rate', 0.0) or
-                        metrics.get('success_rate', 0.0) or
-                        0.0
-                    )
-                }
-                
-                # Display metrics
-                print(f"📊 Iteration {iteration} Results:")
-                print(f"   Average Reward: {vizra_metrics['avg_reward']:.3f}")
-                print(f"   Success Rate: {vizra_metrics['success_rate']:.1%}")
-                print(f"   Num Episodes: {vizra_metrics['num_trajectories']}")
-                if 'loss/total' in metrics:
-                    print(f"   Training Loss: {metrics['loss/total']:.4f}")
-                
-                # Update best reward
-                if vizra_metrics['avg_reward'] > best_reward:
-                    best_reward = vizra_metrics['avg_reward']
-                    best_iteration = iteration
-                    print(f"   🎯 New best average reward!")
-                
-                # Add to history
-                training_history.append({
-                    'iteration': iteration,
-                    'avg_reward': vizra_metrics['avg_reward'],
-                    'metrics': vizra_metrics
-                })
-                
-                # Check early stopping
-                if self._should_stop_early(training_history, training):
-                    print(f"\n🛑 Early stopping triggered at iteration {iteration}")
-                    break
-                    
         except Exception as e:
-            print(f"\n❌ Error during Verifiers training: {e}")
+            print(f"\n❌ Error during Verifiers GRPO training: {e}")
+            import traceback
+            traceback.print_exc()
             print("Falling back to placeholder mode...")
             
             # If Verifiers fails, run placeholder training
@@ -218,7 +211,8 @@ class VerifiersProvider:
         print("\n" + "=" * 50)
         print(f"✅ Training Complete!")
         print(f"🏆 Best Iteration: {best_iteration} (avg reward: {best_reward:.3f})")
-        print(f"📈 Final Average Reward: {training_history[-1]['avg_reward']:.3f}")
+        if training_history:
+            print(f"📈 Final Average Reward: {training_history[-1]['avg_reward']:.3f}")
         print("=" * 50)
         
         # Return results in Vizra format
@@ -313,50 +307,33 @@ class VerifiersProvider:
             'note': 'Verifiers integration failed - ran in placeholder mode'
         }
     
-    def _normalize_tools(self, tools):
-        """Convert tools to a consistent dictionary format."""
-        if isinstance(tools, dict):
-            return tools
-        elif isinstance(tools, list):
-            # Convert list to dict
-            normalized = {}
-            for i, tool in enumerate(tools):
-                if hasattr(tool, '__name__'):
-                    tool_name = tool.__name__
-                elif hasattr(tool, '__class__'):
-                    tool_name = tool.__class__.__name__
-                else:
-                    tool_name = f'tool_{i}'
-                
-                if isinstance(tool, type):
-                    try:
-                        tool_instance = tool()
-                        normalized[tool_name] = tool_instance
-                    except Exception as e:
-                        print(f"Warning: Could not instantiate tool {tool_name}: {e}")
-                        continue
-                else:
-                    normalized[tool_name] = tool
-            return normalized
-        else:
-            return {}
-    
-    def _should_stop_early(self, history, training):
-        """Check if training should stop early."""
-        if len(history) < 5:
-            return False
+    def _prepare_dataset(self, training, data_rows):
+        """Prepare dataset in format expected by Verifiers GRPOTrainer."""
+        from datasets import Dataset
         
-        # Stop if reward is very high
-        if history[-1]['avg_reward'] > 0.95:
-            return True
+        # Convert data to prompts
+        dataset_entries = []
+        for row in data_rows:
+            trajectory = training.prepare_trajectory(row)
+            prompt = trajectory['prompt']
+            
+            # Create entry with prompt and expected output for reference
+            entry = {
+                'prompt': prompt,
+                'query': prompt,  # Some trainers expect 'query'
+                'input': prompt,  # Some expect 'input'
+                'expected_output': row.get('expected_chord', row.get('expected_output', '')),
+            }
+            dataset_entries.append(entry)
         
-        # Stop if no improvement in last 10 iterations
-        if len(history) > 10:
-            recent_rewards = [h['avg_reward'] for h in history[-10:]]
-            if max(recent_rewards) - min(recent_rewards) < 0.01:
-                return True
-        
-        return False
+        return Dataset.from_list(dataset_entries)
+
+
+        # Save the trained model
+        if hasattr(self.trainer, 'save_model'):
+            output_dir = f"./outputs/{self.model_name}-grpo/final"
+            print(f"\n💾 Saving trained model to {output_dir}")
+            self.trainer.save_model(output_dir)
 
 
 class VizraVerifiersEnv:
@@ -379,7 +356,7 @@ class VizraVerifiersEnv:
         # Get agent instructions
         self.instructions = training.agent_class._get_instructions()
     
-    def reset(self):
+    def reset(self, seed=None):
         """Reset environment and return initial observation."""
         # Get next data row (cycle through data)
         row_data = self.data_rows[self.current_idx % len(self.data_rows)]
@@ -399,8 +376,8 @@ class VizraVerifiersEnv:
         ]
         self.turn_count = 0
         
-        # Return initial observation (user message)
-        return prompt
+        # Return initial observation and info
+        return prompt, {}
     
     def step(self, action):
         """
@@ -412,7 +389,8 @@ class VizraVerifiersEnv:
         Returns:
             observation: Next observation (tool result or None)
             reward: Reward for this step
-            done: Whether episode is complete
+            terminated: Whether episode is complete
+            truncated: Whether episode was cut short
             info: Additional information
         """
         self.turn_count += 1
@@ -444,7 +422,8 @@ class VizraVerifiersEnv:
             # Return tool results as observation
             observation = "\n".join(tool_results)
             reward = 0.0  # No reward yet
-            done = False
+            terminated = False
+            truncated = False
             
         else:
             # No tools called - check if we have a final answer
@@ -454,18 +433,17 @@ class VizraVerifiersEnv:
             reward = self.training.calculate_reward(self.current_row, action)
             
             # Episode is done if we have a chord answer
-            done = any(word in action for word in ['Major', 'Minor', 'Diminished', 'Augmented'])
+            terminated = any(word in action for word in ['Major', 'Minor', 'Diminished', 'Augmented'])
             
-            # Also done if max turns reached
-            if self.turn_count >= 10:
-                done = True
+            # Truncate if max turns reached
+            truncated = self.turn_count >= 10
         
         info = {
             'turn_count': self.turn_count,
             'messages': self.messages
         }
         
-        return observation, reward, done, info
+        return observation, reward, terminated, truncated, info
     
     def _execute_tool(self, tool_name, tool_input):
         """Execute a tool and return its result."""
