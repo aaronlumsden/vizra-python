@@ -383,7 +383,8 @@ class ARTProvider:
             )
             
             # Calculate metrics from trajectories for compatibility with base class
-            rewards = [traj.reward for traj in art_trajectories if hasattr(traj, 'reward')]
+            # Extract rewards from the original Vizra trajectories, not ART trajectories
+            rewards = [traj['reward'] for traj in trajectories if 'reward' in traj]
             if not rewards:
                 rewards = [0.0]
             
