@@ -174,14 +174,8 @@ class BaseRLTraining:
         Returns:
             List of trajectory dictionaries
         """
-        # Debug: Check provider status
-        print(f"\n🔍 Debug: Provider is: {self.provider}")
-        if self.provider:
-            print(f"🔍 Debug: Provider has collect_trajectories: {hasattr(self.provider, 'collect_trajectories')}")
-        
         # If provider handles trajectory collection, delegate to it
         if self.provider and hasattr(self.provider, 'collect_trajectories'):
-            print("🚀 Using ART provider for trajectory collection")
             # Pass self to give provider access to agent, metrics, etc.
             return self.provider.collect_trajectories(
                 training=self,
@@ -190,7 +184,6 @@ class BaseRLTraining:
             )
         
         # Otherwise use default Vizra behavior
-        print("📌 Using default Vizra trajectory collection")
         trajectories = []
         
         for i, row_data in enumerate(data_rows):
