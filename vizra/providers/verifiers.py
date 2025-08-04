@@ -117,7 +117,7 @@ class VerifiersProvider:
             # GRPO specific
             beta=0.1,  # KL penalty coefficient
             num_generations=2,  # GRPO requires at least 2
-            max_new_tokens=128,
+            max_tokens=128,
             temperature=0.7,
             
             # Other settings
@@ -129,10 +129,6 @@ class VerifiersProvider:
             # Device settings
             fp16=torch.cuda.is_available(),
             bf16=False,
-            
-            # Use external vLLM
-            use_vllm=True,
-            vllm_server=self.inference_base_url,
         )
         
         # Initialize GRPO trainer with custom environment
