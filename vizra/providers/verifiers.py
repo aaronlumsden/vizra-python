@@ -134,6 +134,19 @@ class VerifiersProvider:
         console.print(f"Model: {self.base_model}")
         console.print(f"✅ Weight Updates: [bold green]ENABLED[/bold green] (not placeholder mode)")
         
+        # Count data before any dataset operations
+        import pandas as pd
+        df = pd.read_csv(Path(training.csv_path))
+        train_count = len(df)
+        eval_count = 0
+        if Path(training.csv_path).parent / "chord_identifier_eval.csv":
+            try:
+                eval_df = pd.read_csv(Path(training.csv_path).parent / "chord_identifier_eval.csv")
+                eval_count = len(eval_df)
+            except:
+                pass
+        console.print(f"Data: {train_count} train, {eval_count} eval examples")
+        
         # Load training data
         csv_path = Path(training.csv_path)
         if not csv_path.exists():
@@ -173,19 +186,26 @@ class VerifiersProvider:
             # Restore original verbosity
             os.environ["TRANSFORMERS_VERBOSITY"] = original_transformers_verbosity
         
-        # Create Verifiers environment wrapper  
-        env = VizraVerifiersEnv(training, data_rows, eval_data_rows)
+        # Suppress all output during environment and dataset creation
+        sys.stdout = io.StringIO()
+        sys.stderr = io.StringIO()
+        try:
+            # Create Verifiers environment wrapper  
+            env = VizraVerifiersEnv(training, data_rows, eval_data_rows)
+            
+            # Get datasets from environment and set as attributes
+            train_dataset = env.get_dataset()
+            eval_dataset = env.get_eval_dataset() if eval_data_rows else None
+            
+            # Set datasets as attributes on the environment (in case GRPOTrainer expects them)
+            env.dataset = train_dataset
+            env.eval_dataset = eval_dataset
+        finally:
+            # Restore stdout/stderr
+            sys.stdout = old_stdout
+            sys.stderr = old_stderr
         
-        # Get datasets from environment and set as attributes
-        train_dataset = env.get_dataset()
-        eval_dataset = env.get_eval_dataset() if eval_data_rows else None
-        
-        # Set datasets as attributes on the environment (in case GRPOTrainer expects them)
-        env.dataset = train_dataset
-        env.eval_dataset = eval_dataset
-        
-        # Show data summary
-        console.print(f"\nData: {len(train_dataset)} train, {len(eval_dataset) if eval_dataset else 0} eval examples")
+        # Data summary will be shown in the initial output, not here
         
         # Create GRPO config with Verifiers' expected parameters
         config = GRPOConfig(
@@ -248,7 +268,7 @@ class VerifiersProvider:
         
         # Show training configuration
         if metric_weights:
-            console.print(f"\nMetric weights: Exact {metric_weights.get('exact_match', 0)*100:.0f}% | Tool {metric_weights.get('tool_usage', 0)*100:.0f}% | Format {metric_weights.get('chord_format', 0)*100:.0f}%")
+            console.print(f"Metric weights: Exact {metric_weights.get('exact_match', 0)*100:.0f}% | Tool {metric_weights.get('tool_usage', 0)*100:.0f}% | Format {metric_weights.get('chord_format', 0)*100:.0f}%")
         console.print()
         
         # Training history for Vizra
