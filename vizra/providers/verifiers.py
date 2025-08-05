@@ -423,9 +423,7 @@ class VerifiersProvider:
             else:
                 console.print("[yellow]Warning: Could not register metrics callback[/yellow]")
             
-            # Run training with simple status updates
-            import contextlib
-            import threading
+            # Run training with simpler status updates
             import time
             
             console.print("🔄 [bold cyan]Training in progress...[/bold cyan]")
@@ -434,84 +432,45 @@ class VerifiersProvider:
             # Track if we've shown any metrics
             callback.shown_metrics = False
             
-            # Create a simple spinner thread
-            stop_spinner = threading.Event()
-            
-            def show_spinner():
-                spinner_chars = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
-                i = 0
-                start_time = time.time()
-                status_messages = [
-                    "Initializing model weights",
-                    "Processing training batches",
-                    "Computing gradients",
-                    "Updating parameters",
-                    "Evaluating performance"
-                ]
-                msg_idx = 0
-                msg_timer = 0
-                
-                while not stop_spinner.is_set():
-                    elapsed = time.time() - start_time
-                    mins = int(elapsed // 60)
-                    secs = int(elapsed % 60)
-                    time_str = f"{mins}:{secs:02d}" if mins > 0 else f"{secs}s"
-                    
-                    # Change status message every 3 seconds
-                    if msg_timer >= 30:  # 30 * 0.1 = 3 seconds
-                        msg_idx = (msg_idx + 1) % len(status_messages)
-                        msg_timer = 0
-                    
-                    status = status_messages[msg_idx]
-                    print(f"\r{spinner_chars[i % len(spinner_chars)]} {status}... [{time_str}]                    ", end="", flush=True)
-                    i += 1
-                    msg_timer += 1
-                    time.sleep(0.1)
-                print("\r✅ Training completed!                                                      ", flush=True)
-            
-            # Start spinner in background
-            spinner_thread = threading.Thread(target=show_spinner)
-            spinner_thread.daemon = True
-            spinner_thread.start()
-            
             try:
-                # Add timeout and debug
-                import signal
-                
-                def timeout_handler(signum, frame):
-                    raise TimeoutError("Training is taking too long - possible hang detected")
-                
-                # Set a timeout for test mode (2 minutes)
-                if getattr(training, 'n_iterations', 1) == 1:  # Test mode
-                    signal.signal(signal.SIGALRM, timeout_handler)
-                    signal.alarm(120)  # 2 minute timeout
-                
-                console.print("\n[yellow]Starting GRPO trainer.train() call...[/yellow]")
+                console.print("[yellow]Starting GRPO trainer.train() call...[/yellow]")
                 console.print("[dim]If this hangs, there may be an issue with the model or environment[/dim]\n")
                 
-                # Run training without output suppression for debugging
+                # Add more detailed logging
+                console.print(f"[dim]Model: {self.model.__class__.__name__}[/dim]")
+                console.print(f"[dim]Environment: {env.__class__.__name__}[/dim]")
+                console.print(f"[dim]Dataset size: {len(train_dataset)} samples[/dim]")
+                console.print(f"[dim]Batch size: {config.per_device_train_batch_size}[/dim]")
+                console.print(f"[dim]Num epochs: {config.num_train_epochs}[/dim]")
+                console.print(f"[dim]vLLM endpoint: http://localhost:8000/v1[/dim]\n")
+                
+                # Test vLLM connection one more time
+                try:
+                    import requests
+                    test_response = requests.post(
+                        "http://localhost:8000/v1/completions",
+                        json={"model": "Qwen/Qwen2.5-0.5B-Instruct", "prompt": "test", "max_tokens": 1},
+                        timeout=5
+                    )
+                    if test_response.status_code == 200:
+                        console.print("[green]✓ vLLM test completion successful[/green]")
+                    else:
+                        console.print(f"[red]✗ vLLM test failed: {test_response.status_code}[/red]")
+                except Exception as e:
+                    console.print(f"[red]✗ vLLM test error: {e}[/red]")
+                
+                console.print("\n[cyan]Calling trainer.train() now...[/cyan]")
+                start_time = time.time()
+                
+                # Run training WITHOUT threading complications
                 train_output = self.trainer.train()
                 
-                # Cancel timeout
-                if getattr(training, 'n_iterations', 1) == 1:
-                    signal.alarm(0)
+                elapsed = time.time() - start_time
+                console.print(f"\n[green]✅ Training completed in {elapsed:.1f} seconds![/green]")
                     
-            except TimeoutError as e:
-                stop_spinner.set()
-                console.print(f"\n[red]Training timeout: {e}[/red]")
-                console.print("[yellow]The training appears to be stuck. This could be due to:[/yellow]")
-                console.print("  • Model initialization issues")
-                console.print("  • vLLM server not responding")
-                console.print("  • Environment configuration problems")
-                raise
             except Exception as e:
-                stop_spinner.set()
-                console.print(f"\n[red]Training error: {e}[/red]")
+                console.print(f"\n[red]Training error: {type(e).__name__}: {e}[/red]")
                 raise
-            finally:
-                # Stop spinner
-                stop_spinner.set()
-                spinner_thread.join(timeout=1)
             
             # If no metrics were shown during training, show a summary
             if not callback.shown_metrics:
@@ -571,10 +530,13 @@ class VerifiersProvider:
                 best_iteration = 1
                 
         except Exception as e:
-            print(f"\n❌ Error during Verifiers GRPO training: {e}")
+            stop_spinner.set()  # Stop spinner if running
+            console.print(f"\n\n❌ Error during Verifiers GRPO training: {e}")
+            console.print("\n[yellow]Full error details:[/yellow]")
             import traceback
             traceback.print_exc()
-            print("Falling back to placeholder mode...")
+            console.print("\n[yellow]Falling back to placeholder mode...[/yellow]")
+            console.print("[dim]This mode simulates training without actual weight updates[/dim]")
             
             # If Verifiers fails, run placeholder training
             return self._run_placeholder_training(training, data_rows)
@@ -704,17 +666,12 @@ class VerifiersProvider:
     def _run_placeholder_training(self, training, data_rows):
         """Fallback placeholder training if Verifiers integration fails."""
         console.print("\n[yellow]⚠️  Running in placeholder mode (no weight updates)[/yellow]")
-        
-        from openai import AsyncOpenAI
-        import asyncio
+        console.print("[dim]Using simulated responses instead of actual model inference[/dim]\n")
         
         # Training history
         training_history = []
         best_reward = -float('inf')
         best_iteration = 1
-        
-        # Create simple environment for placeholder
-        env = VizraVerifiersEnv(training, data_rows)
         
         # Training loop
         for iteration in range(1, training.n_iterations + 1):
@@ -727,15 +684,24 @@ class VerifiersProvider:
             else:
                 batch_data = data_rows
             
-            # Collect trajectories
+            # Simulate trajectories without calling the agent
             rewards = []
             for i, row_data in enumerate(batch_data):
-                print(f"\r[{i+1}/{len(batch_data)}] Collecting trajectories...", end='', flush=True)
+                print(f"\r[{i+1}/{len(batch_data)}] Simulating trajectories...", end='', flush=True)
                 
-                # Simple reward calculation
-                trajectory_data = training.prepare_trajectory(row_data)
-                # Simulate some response
-                response = "C Major"  # Placeholder
+                # Generate a simulated response
+                expected = row_data.get('expected_chord', row_data.get('expected_output', 'C Major'))
+                
+                # Simulate varying quality responses
+                import random
+                if random.random() < 0.7:  # 70% correct
+                    response = expected
+                else:
+                    # Generate a plausible but wrong answer
+                    wrong_answers = ['C Major', 'A Minor', 'G Major', 'D Minor', 'F Major']
+                    response = random.choice([w for w in wrong_answers if w != expected])
+                
+                # Calculate reward using actual reward function
                 reward = training.calculate_reward(row_data, response)
                 rewards.append(reward)
             
@@ -1009,7 +975,8 @@ class VizraVerifiersEnv(MultiTurnEnv):
         from verifiers.envs.environment import GenerateOutputs
         import os
         
-        # Process inputs (removed debug logging)
+        # Debug: log when this is called
+        print(f"\n[DEBUG] a_generate called with {len(inputs.prompt) if hasattr(inputs, 'prompt') else 'unknown'} prompts")
         
         # Initialize async client for vLLM
         client = AsyncOpenAI(
