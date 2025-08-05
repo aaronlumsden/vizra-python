@@ -99,7 +99,7 @@ class VerifiersProvider:
         
         self.model = AutoModelForCausalLM.from_pretrained(
             self.base_model,
-            torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
+            torch_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
             # Remove device_map - let accelerate handle device placement for multi-GPU
         )
         
@@ -148,9 +148,9 @@ class VerifiersProvider:
             save_steps=500,
             eval_steps=100,
             
-            # Device settings
-            fp16=torch.cuda.is_available(),
-            bf16=False,
+            # Device settings - use bf16 to avoid FP16 gradient issues
+            fp16=False,
+            bf16=torch.cuda.is_available(),
             gradient_checkpointing=self.config.get('gradient_checkpointing',
                                                  getattr(training, 'gradient_checkpointing', True)),
             
