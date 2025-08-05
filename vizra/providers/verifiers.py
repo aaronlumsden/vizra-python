@@ -685,7 +685,7 @@ class VizraVerifiersEnv(MultiTurnEnv):
         Returns:
             ProcessedOutputs object expected by Verifiers
         """
-        from verifiers.trainers.processed_outputs import ProcessedOutputs
+        from verifiers.envs.environment import ProcessedOutputs
         
         # Tokenize prompts and completions
         prompt_tokens = processing_class(prompts, padding=True, truncation=True, 
