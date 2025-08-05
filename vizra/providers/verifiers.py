@@ -60,7 +60,7 @@ class VerifiersProvider:
             import verifiers
             from verifiers.trainers.grpo_trainer import GRPOTrainer
             from verifiers.trainers.grpo_config import GRPOConfig
-            from verifiers.envs.environment import MultiTurnEnv
+            from verifiers.envs.multiturn_env import MultiTurnEnv
         except ImportError as e:
             raise ImportError(
                 f"Required packages missing: {e}\n"
@@ -319,7 +319,7 @@ class VerifiersProvider:
 
 # Import MultiTurnEnv at module level for inheritance
 try:
-    from verifiers.envs.environment import MultiTurnEnv
+    from verifiers.envs.multiturn_env import MultiTurnEnv
 except ImportError:
     # Fallback base class if verifiers not installed yet
     MultiTurnEnv = object
@@ -336,7 +336,7 @@ class VizraVerifiersEnv(MultiTurnEnv):
         """Initialize environment with training configuration."""
         # Initialize base class if it's MultiTurnEnv
         if MultiTurnEnv is not object:
-            super().__init__()
+            super().__init__(message_type="chat", max_turns=10)
         
         self.training = training
         self.data_rows = data_rows
@@ -604,10 +604,18 @@ class VizraVerifiersEnv(MultiTurnEnv):
         # This method is called after a_generate to do any post-processing
         return env_results
     
+    def setup_state(self, state, **kwargs):
+        """Setup initial state for a new rollout."""
+        if state is None:
+            state = {}
+        state['turn_count'] = 0
+        return state
+    
     def is_completed(self, messages, state, **kwargs):
         """Check if the rollout is completed - required by Verifiers MultiTurnEnv."""
         # Check if we've reached max turns
-        if hasattr(self, 'turn_count') and self.turn_count >= 10:
+        turn_count = state.get('turn_count', 0) if state else 0
+        if turn_count >= self.max_turns:
             return True
         
         # Check if the last message contains a chord answer
