@@ -63,13 +63,12 @@ class VerifiersProvider:
         Returns:
             Dict with training results in Vizra format
         """
-        # Set distributed training environment variables for single GPU
+        # Simple single-GPU setup - avoid distributed training complexity
         import os
+        os.environ["CUDA_VISIBLE_DEVICES"] = os.environ.get("CUDA_VISIBLE_DEVICES", "0")
         os.environ["RANK"] = "0"
         os.environ["LOCAL_RANK"] = "0"
-        os.environ["WORLD_SIZE"] = "1"  # Single GPU training
-        os.environ["MASTER_ADDR"] = "127.0.0.1"
-        os.environ["MASTER_PORT"] = "29500"
+        os.environ["WORLD_SIZE"] = "1"
         
         try:
             import verifiers
@@ -130,7 +129,7 @@ class VerifiersProvider:
             self.model = AutoModelForCausalLM.from_pretrained(
                 self.base_model,
                 torch_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
-                # Remove device_map - let accelerate handle device placement for multi-GPU
+                device_map="auto"  # Simple auto device mapping
             )
         
         # Create Verifiers environment wrapper  
@@ -182,9 +181,12 @@ class VerifiersProvider:
             gradient_checkpointing=self.config.get('gradient_checkpointing',
                                                  getattr(training, 'gradient_checkpointing', True)),
             
-            # Disable distributed training
-            ddp_backend=None,
+            # Simple single-GPU settings
+            ddp_backend=None,  # No distributed backend
             local_rank=-1,
+            deepspeed=None,
+            no_cuda=False,
+            dataloader_num_workers=2  # Reduce workers for simplicity
         )
         
         # Initialize GRPO trainer with custom environment
