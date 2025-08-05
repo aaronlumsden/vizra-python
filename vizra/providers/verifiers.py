@@ -252,9 +252,8 @@ class VerifiersProvider:
             log_level_replica="info",
         )
         
-        # Initialize GRPO trainer with custom environment (suppress output)
-        sys.stdout = io.StringIO()
-        sys.stderr = io.StringIO()
+        # Initialize GRPO trainer with custom environment
+        console.print("[dim]Initializing GRPOTrainer...[/dim]")
         try:
             self.trainer = GRPOTrainer(
                 model=self.model,
@@ -262,10 +261,10 @@ class VerifiersProvider:
                 args=config,
                 processing_class=self.tokenizer,
             )
-        finally:
-            # Restore stdout/stderr
-            sys.stdout = old_stdout
-            sys.stderr = old_stderr
+            console.print("[green]✓ GRPOTrainer initialized successfully[/green]")
+        except Exception as e:
+            console.print(f"[red]✗ GRPOTrainer initialization failed: {e}[/red]")
+            raise
         
         # Show training configuration
         if metric_weights:
@@ -458,7 +457,31 @@ class VerifiersProvider:
                     console.print(f"[red]✗ vLLM test error: {e}[/red]")
                 
                 console.print("\n[cyan]Calling trainer.train() now...[/cyan]")
+                console.print("[dim]This calls env.a_generate() internally for each batch[/dim]")
                 start_time = time.time()
+                
+                # Add a quick test of the environment
+                console.print("\n[yellow]Testing environment methods first...[/yellow]")
+                try:
+                    # Test if the environment can be called
+                    test_prompt = "What chord is formed by C, E, and G?"
+                    from verifiers.envs.environment import GenerateInputs
+                    test_inputs = GenerateInputs(
+                        prompt=[test_prompt],
+                        answer=["C Major"],
+                        task=["chord_identification"],
+                        info=[{}]
+                    )
+                    console.print("[dim]Calling env.a_generate() directly...[/dim]")
+                    import asyncio
+                    test_result = asyncio.run(env.a_generate(test_inputs, max_tokens=50))
+                    console.print(f"[green]✓ Environment test successful, got {len(test_result.completion)} completions[/green]")
+                except Exception as e:
+                    console.print(f"[red]✗ Environment test failed: {e}[/red]")
+                    import traceback
+                    traceback.print_exc()
+                
+                console.print("\n[cyan]Now calling trainer.train()...[/cyan]")
                 
                 # Run training WITHOUT threading complications
                 train_output = self.trainer.train()
@@ -974,7 +997,13 @@ class VizraVerifiersEnv(MultiTurnEnv):
         import os
         
         # Debug: log when this is called
-        print(f"\n[DEBUG] a_generate called with {len(inputs.prompt) if hasattr(inputs, 'prompt') else 'unknown'} prompts")
+        num_prompts = len(inputs.prompt) if hasattr(inputs, 'prompt') else 'unknown'
+        print(f"\n[DEBUG] a_generate called with {num_prompts} prompts")
+        
+        # More detailed logging
+        if hasattr(inputs, 'prompt') and inputs.prompt:
+            print(f"[DEBUG] First prompt: {inputs.prompt[0][:50]}...")
+        print(f"[DEBUG] kwargs: {list(kwargs.keys())}")
         
         # Initialize async client for vLLM
         client = AsyncOpenAI(
