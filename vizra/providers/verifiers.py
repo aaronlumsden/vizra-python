@@ -475,6 +475,48 @@ class VizraVerifiersEnv:
         
         return observation, reward, terminated, truncated, info
     
+    async def a_generate(self, prompts, **kwargs):
+        """Async generation method required by Verifiers."""
+        from openai import AsyncOpenAI
+        import os
+        
+        # Initialize async client for vLLM
+        client = AsyncOpenAI(
+            base_url="http://localhost:8000/v1",
+            api_key="dummy"  # vLLM doesn't need a real key
+        )
+        
+        # Extract generation parameters
+        max_tokens = kwargs.get('max_tokens', 256)
+        temperature = kwargs.get('temperature', 0.7)
+        model = kwargs.get('model', 'Qwen/Qwen2.5-0.5B-Instruct')
+        
+        responses = []
+        for prompt in prompts:
+            # Create messages with system prompt and user input
+            messages = [
+                {"role": "system", "content": self.instructions},
+                {"role": "user", "content": prompt}
+            ]
+            
+            try:
+                # Call vLLM server
+                completion = await client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    n=1
+                )
+                response = completion.choices[0].message.content
+            except Exception as e:
+                print(f"Error calling vLLM: {e}")
+                response = "Error generating response"
+            
+            responses.append(response)
+        
+        return responses
+    
     def _execute_tool(self, tool_name, tool_input):
         """Execute a tool and return its result."""
         # Find tool by xml_tag or name
