@@ -107,6 +107,14 @@ class VerifiersProvider:
         print("\n🔧 Initializing Verifiers environment...")
         env = VizraVerifiersEnv(training, data_rows, eval_data_rows)
         
+        # Get datasets from environment
+        train_dataset = env.get_dataset()
+        eval_dataset = env.get_eval_dataset() if eval_data_rows else None
+        
+        print(f"📊 Training dataset size: {len(train_dataset)}")
+        if eval_dataset:
+            print(f"📊 Evaluation dataset size: {len(eval_dataset)}")
+        
         # Configure GRPO training
         print(f"\n🚀 Initializing GRPO trainer...")
         
@@ -146,12 +154,14 @@ class VerifiersProvider:
             local_rank=-1,
         )
         
-        # Initialize GRPO trainer with custom environment
+        # Initialize GRPO trainer with custom environment and datasets
         self.trainer = GRPOTrainer(
             model=self.model,
             env=env,  # Pass our Verifiers environment
             args=config,
             processing_class=self.tokenizer,
+            train_dataset=train_dataset,  # Pass dataset directly
+            eval_dataset=eval_dataset,    # Pass eval dataset if available
         )
         
         print("✅ GRPO trainer initialized successfully!")
@@ -366,12 +376,18 @@ class VizraVerifiersEnv(MultiTurnEnv):
                 trajectory = self.training.prepare_trajectory(row)
                 prompt = trajectory['prompt']
                 
-                # Create entry with prompt
+                # Create entry with required columns for GRPO
                 entry = {
                     'prompt': prompt,
-                    'query': prompt,  # Some trainers expect 'query'
-                    'input': prompt,  # Some expect 'input'
-                    'expected_output': row.get('expected_chord', row.get('expected_output', '')),
+                    'answer': row.get('expected_chord', row.get('expected_output', '')),  # Required by GRPO
+                    'task': 'chord_identification',  # Required by GRPO
+                    'info': {  # Required by GRPO
+                        'expected_output': row.get('expected_chord', row.get('expected_output', '')),
+                        'question': row.get('question', ''),
+                    },
+                    # Additional columns for compatibility
+                    'query': prompt,
+                    'input': prompt,
                 }
                 dataset_entries.append(entry)
             
@@ -391,12 +407,18 @@ class VizraVerifiersEnv(MultiTurnEnv):
                 trajectory = self.training.prepare_trajectory(row)
                 prompt = trajectory['prompt']
                 
-                # Create entry with prompt
+                # Create entry with required columns for GRPO
                 entry = {
                     'prompt': prompt,
-                    'query': prompt,  # Some trainers expect 'query'
-                    'input': prompt,  # Some expect 'input'
-                    'expected_output': row.get('expected_chord', row.get('expected_output', '')),
+                    'answer': row.get('expected_chord', row.get('expected_output', '')),  # Required by GRPO
+                    'task': 'chord_identification',  # Required by GRPO
+                    'info': {  # Required by GRPO
+                        'expected_output': row.get('expected_chord', row.get('expected_output', '')),
+                        'question': row.get('question', ''),
+                    },
+                    # Additional columns for compatibility
+                    'query': prompt,
+                    'input': prompt,
                 }
                 dataset_entries.append(entry)
             
