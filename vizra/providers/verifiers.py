@@ -683,20 +683,28 @@ class VizraVerifiersEnv(MultiTurnEnv):
             zero_truncated_completions: Whether to zero out truncated completions
         
         Returns:
-            Processed results object
+            ProcessedOutputs object expected by Verifiers
         """
-        from verifiers.envs.environment import GenerateOutputs
+        from verifiers.trainers.processed_outputs import ProcessedOutputs
         
-        # For now, return the results as-is in the expected format
-        return GenerateOutputs(
-            prompt=prompts,
-            answer=["" for _ in prompts],  # Empty answers for now
-            task=["chord_identification" for _ in prompts],
-            info=[{} for _ in prompts],
-            completion=completions,
-            state=states,
-            reward=rewards,
-            metrics={}
+        # Tokenize prompts and completions
+        prompt_tokens = processing_class(prompts, padding=True, truncation=True, 
+                                        max_length=max_seq_len, return_tensors="pt")
+        completion_tokens = processing_class(completions, padding=True, truncation=True,
+                                           max_length=max_seq_len, return_tensors="pt")
+        
+        # Create ProcessedOutputs object
+        return ProcessedOutputs(
+            prompts=prompts,
+            completions=completions,
+            prompt_ids=prompt_tokens.input_ids,
+            completion_ids=completion_tokens.input_ids,
+            prompt_attention_mask=prompt_tokens.attention_mask,
+            completion_attention_mask=completion_tokens.attention_mask,
+            states=states,
+            rewards=rewards,
+            processing_class=processing_class,
+            max_seq_len=max_seq_len
         )
     
     def setup_state(self, state, **kwargs):
