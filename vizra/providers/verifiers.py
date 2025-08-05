@@ -24,14 +24,20 @@ from rich.table import Table
 console = Console()
 
 # Suppress verbose logging from Verifiers and related libraries
-logging.getLogger("verifiers").setLevel(logging.WARNING)
-logging.getLogger("verifiers.trainers").setLevel(logging.WARNING)
-logging.getLogger("verifiers.trainers.grpo_trainer").setLevel(logging.WARNING)
-logging.getLogger("verifiers.inference").setLevel(logging.WARNING)
-logging.getLogger("verifiers.inference.vllm_client").setLevel(logging.WARNING)
-logging.getLogger("transformers").setLevel(logging.WARNING)
-logging.getLogger("torch").setLevel(logging.WARNING)
-logging.getLogger("accelerate").setLevel(logging.WARNING)
+logging.getLogger("verifiers").setLevel(logging.ERROR)
+logging.getLogger("verifiers.trainers").setLevel(logging.ERROR)
+logging.getLogger("verifiers.trainers.grpo_trainer").setLevel(logging.ERROR)
+logging.getLogger("verifiers.inference").setLevel(logging.ERROR)
+logging.getLogger("verifiers.inference.vllm_client").setLevel(logging.ERROR)
+logging.getLogger("transformers").setLevel(logging.ERROR)
+logging.getLogger("torch").setLevel(logging.ERROR)
+logging.getLogger("accelerate").setLevel(logging.ERROR)
+logging.getLogger("datasets").setLevel(logging.ERROR)
+logging.getLogger("vllm").setLevel(logging.ERROR)
+logging.getLogger("ray").setLevel(logging.ERROR)
+
+# Also configure root logger
+logging.basicConfig(level=logging.ERROR)
 
 
 class VerifiersProvider:
@@ -78,6 +84,8 @@ class VerifiersProvider:
         os.environ["TRANSFORMERS_VERBOSITY"] = "error"
         os.environ["ACCELERATE_LOG_LEVEL"] = "ERROR"
         os.environ["TOKENIZERS_PARALLELISM"] = "false"
+        os.environ["HF_DATASETS_DISABLE_PROGRESS_BARS"] = "1"
+        os.environ["NCCL_P2P_DISABLE"] = "1"  # Disable peer-to-peer to avoid NCCL warnings
         
         try:
             import verifiers
@@ -230,8 +238,11 @@ class VerifiersProvider:
             provider_self = self
             
             # Custom callback to capture training progress
-            class ChordMetricsCallback:
+            from transformers import TrainerCallback
+            
+            class ChordMetricsCallback(TrainerCallback):
                 def __init__(self):
+                    super().__init__()
                     self.current_metrics = {
                         'exact_match': 0.0,
                         'tool_usage': 0.0,
@@ -309,9 +320,8 @@ class VerifiersProvider:
                                 f"[bold {overall_color}]{overall_bar}[/bold {overall_color}]"
                             )
                             
-                            # Clear previous output and show metrics
-                            console.clear()
-                            console.print(f"\n🎯 [bold cyan]Iteration {self.iteration}[/bold cyan]")
+                            # Show metrics (without clearing for better compatibility)
+                            console.print(f"\n🎯 [bold cyan]Step {self.iteration}[/bold cyan]")
                             console.print(metrics_table)
                             
                             # Show performance improvement
@@ -522,7 +532,7 @@ class VerifiersProvider:
             # Collect trajectories
             rewards = []
             for i, row_data in enumerate(batch_data):
-                console.print(f"\r[{i+1}/{len(batch_data)}] Collecting trajectories...", end='', flush=True)
+                print(f"\r[{i+1}/{len(batch_data)}] Collecting trajectories...", end='', flush=True)
                 
                 # Simple reward calculation
                 trajectory_data = training.prepare_trajectory(row_data)
