@@ -347,10 +347,7 @@ class VizraVerifiersEnv(MultiTurnEnv):
     
     def __init__(self, training, data_rows, eval_data_rows=None):
         """Initialize environment with training configuration."""
-        # Initialize base class if it's MultiTurnEnv
-        if MultiTurnEnv is not object:
-            super().__init__(message_type="chat", max_turns=10)
-        
+        # Store data first
         self.training = training
         self.data_rows = data_rows
         self.eval_data_rows = eval_data_rows if eval_data_rows is not None else data_rows
@@ -363,9 +360,22 @@ class VizraVerifiersEnv(MultiTurnEnv):
         # Get agent instructions
         self.instructions = training.agent_class._get_instructions()
         
-        # Initialize dataset attributes (will be created lazily)
+        # Initialize dataset attributes
         self.dataset = None
         self.eval_dataset = None
+        
+        # Create datasets before calling parent init
+        self.dataset = self.get_dataset()
+        self.eval_dataset = self.get_eval_dataset()
+        
+        # Initialize base class with datasets
+        if MultiTurnEnv is not object:
+            super().__init__(
+                message_type="chat", 
+                max_turns=10,
+                dataset=self.dataset,
+                eval_dataset=self.eval_dataset
+            )
     
     def get_dataset(self):
         """Return the dataset for GRPOTrainer."""
