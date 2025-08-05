@@ -99,7 +99,7 @@ class VerifiersProvider:
         self.model = AutoModelForCausalLM.from_pretrained(
             self.base_model,
             torch_dtype=torch.float16 if torch.cuda.is_available() else torch.float32,
-            device_map="auto" if torch.cuda.is_available() else None
+            # Remove device_map - let accelerate handle device placement for multi-GPU
         )
         
         # Create Verifiers environment wrapper
@@ -114,10 +114,12 @@ class VerifiersProvider:
             # Output directory
             output_dir=f"./outputs/{self.model_name}-grpo",
             
-            # Training hyperparameters
+            # Training hyperparameters - check self.config first, then training attributes
             learning_rate=training.learning_rate,
-            per_device_train_batch_size=min(4, training.batch_size),
-            gradient_accumulation_steps=max(1, training.batch_size // 4),
+            per_device_train_batch_size=self.config.get('per_device_batch_size', 
+                                                       getattr(training, 'per_device_batch_size', 8)),
+            gradient_accumulation_steps=self.config.get('gradient_accumulation_steps',
+                                                      getattr(training, 'gradient_accumulation_steps', 1)),
             num_train_epochs=training.n_iterations,
             
             # GRPO specific
@@ -135,6 +137,8 @@ class VerifiersProvider:
             # Device settings
             fp16=torch.cuda.is_available(),
             bf16=False,
+            gradient_checkpointing=self.config.get('gradient_checkpointing',
+                                                 getattr(training, 'gradient_checkpointing', True)),
         )
         
         # Initialize GRPO trainer with custom environment
