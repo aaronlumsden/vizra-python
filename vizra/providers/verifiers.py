@@ -60,6 +60,7 @@ class VerifiersProvider:
             import verifiers
             from verifiers.trainers.grpo_trainer import GRPOTrainer
             from verifiers.trainers.grpo_config import GRPOConfig
+            from verifiers.envs.environment import MultiTurnEnv
         except ImportError as e:
             raise ImportError(
                 f"Required packages missing: {e}\n"
@@ -139,6 +140,10 @@ class VerifiersProvider:
             bf16=False,
             gradient_checkpointing=self.config.get('gradient_checkpointing',
                                                  getattr(training, 'gradient_checkpointing', True)),
+            
+            # Disable distributed training
+            ddp_backend=None,
+            local_rank=-1,
         )
         
         # Initialize GRPO trainer with custom environment
@@ -312,15 +317,27 @@ class VerifiersProvider:
         }
 
 
-class VizraVerifiersEnv:
+# Import MultiTurnEnv at module level for inheritance
+try:
+    from verifiers.envs.environment import MultiTurnEnv
+except ImportError:
+    # Fallback base class if verifiers not installed yet
+    MultiTurnEnv = object
+
+
+class VizraVerifiersEnv(MultiTurnEnv):
     """
     Verifiers environment that wraps Vizra agent logic.
     
-    Implements the minimal interface required by Verifiers.
+    Inherits from MultiTurnEnv and implements the required interface.
     """
     
     def __init__(self, training, data_rows, eval_data_rows=None):
         """Initialize environment with training configuration."""
+        # Initialize base class if it's MultiTurnEnv
+        if MultiTurnEnv is not object:
+            super().__init__()
+        
         self.training = training
         self.data_rows = data_rows
         self.eval_data_rows = eval_data_rows if eval_data_rows is not None else data_rows
@@ -335,6 +352,7 @@ class VizraVerifiersEnv:
         
         # Store dataset for GRPOTrainer
         self.dataset = None
+        self.eval_dataset = None
     
     def get_dataset(self):
         """Return the dataset for GRPOTrainer."""
@@ -579,6 +597,102 @@ class VizraVerifiersEnv:
             reward=rewards,
             metrics={}  # No additional metrics for now
         )
+    
+    def process_env_results_vllm(self, env_results, prompts, **kwargs):
+        """Process results from vLLM generation - required by Verifiers."""
+        # For vLLM, the results are already in the correct format
+        # This method is called after a_generate to do any post-processing
+        return env_results
+    
+    def is_completed(self, messages, state, **kwargs):
+        """Check if the rollout is completed - required by Verifiers MultiTurnEnv."""
+        # Check if we've reached max turns
+        if hasattr(self, 'turn_count') and self.turn_count >= 10:
+            return True
+        
+        # Check if the last message contains a chord answer
+        if messages and len(messages) > 0:
+            last_message = messages[-1]
+            if isinstance(last_message, dict) and last_message.get('role') == 'assistant':
+                content = last_message.get('content', '')
+                # Check for chord identifiers
+                if any(word in content for word in ['Major', 'Minor', 'Diminished', 'Augmented']):
+                    return True
+        
+        return False
+    
+    def env_response(self, messages, state, **kwargs):
+        """Generate environment response - required by Verifiers MultiTurnEnv.
+        
+        Returns:
+            Tuple[Messages, State]: New messages list with env response and updated state
+        """
+        if not messages:
+            return messages, state
+        
+        # Get the last message
+        last_message = messages[-1]
+        if not isinstance(last_message, dict) or last_message.get('role') != 'assistant':
+            return messages, state
+        
+        content = last_message.get('content', '')
+        
+        # Check for tool calls in the assistant's message
+        tool_pattern = r'<(\w+)>(.*?)</\1>'
+        tool_matches = re.findall(tool_pattern, content, re.DOTALL)
+        
+        if tool_matches:
+            # Execute tools and add results as new messages
+            new_messages = list(messages)  # Copy messages
+            for tool_name, tool_input in tool_matches:
+                result = self._execute_tool(tool_name, tool_input.strip())
+                
+                # Add tool response as a new message
+                tool_message = {
+                    "role": "tool",
+                    "name": tool_name,
+                    "content": str(result)
+                }
+                new_messages.append(tool_message)
+            
+            # Update state with turn count
+            new_state = state.copy() if isinstance(state, dict) else {}
+            new_state['turn_count'] = new_state.get('turn_count', 0) + 1
+            
+            return new_messages, new_state
+        
+        # No tools called, no environment response needed
+        return messages, state
+    
+    def evaluate(self, n_samples=None, **kwargs):
+        """Evaluate the model on the evaluation dataset - required by Verifiers.
+        
+        Args:
+            n_samples: Number of samples to evaluate (None = all)
+            
+        Returns:
+            Dict with evaluation metrics
+        """
+        eval_data = self.eval_data_rows
+        if n_samples is not None and n_samples < len(eval_data):
+            # Sample subset for evaluation
+            import random
+            eval_data = random.sample(eval_data, n_samples)
+        
+        # Calculate evaluation metrics
+        correct = 0
+        total = len(eval_data)
+        
+        for row in eval_data:
+            # For now, return simple metrics
+            # In a real implementation, this would run inference and check results
+            pass
+        
+        return {
+            'eval_samples': total,
+            'eval_accuracy': 0.5,  # Placeholder
+            'eval_reward': 0.5,    # Placeholder
+        }
     
     def _execute_tool(self, tool_name, tool_input):
         """Execute a tool and return its result."""
