@@ -244,13 +244,14 @@ class VerifiersProvider:
             ddp_backend=None,
             local_rank=-1,
             
-            # Reduce logging verbosity
-            logging_dir=None,
-            logging_strategy="no",
-            report_to=[],  # Disable all reporting
+            # Configure logging to trigger callbacks
+            logging_dir="./logs",
+            logging_strategy="steps",  # Log at each step
+            logging_steps=1,  # Log every step
+            report_to=[],  # Disable external reporting
             disable_tqdm=True,  # Disable progress bars from transformers
-            log_level="error",
-            log_level_replica="error",
+            log_level="info",  # Need info level for callbacks
+            log_level_replica="info",
         )
         
         # Initialize GRPO trainer with custom environment (suppress output)
@@ -271,6 +272,19 @@ class VerifiersProvider:
         # Show training configuration
         if metric_weights:
             console.print(f"Metric weights: Exact {metric_weights.get('exact_match', 0)*100:.0f}% | Tool {metric_weights.get('tool_usage', 0)*100:.0f}% | Format {metric_weights.get('chord_format', 0)*100:.0f}%")
+        
+        # Check vLLM server before starting
+        console.print("\n🔍 Checking vLLM server connection...")
+        try:
+            import requests
+            response = requests.get("http://localhost:8000/health", timeout=5)
+            if response.status_code == 200:
+                console.print("[green]✓ vLLM server is healthy[/green]")
+            else:
+                console.print(f"[yellow]⚠ vLLM server returned status {response.status_code}[/yellow]")
+        except Exception as e:
+            console.print(f"[red]✗ Cannot connect to vLLM server: {e}[/red]")
+            console.print("[yellow]Make sure vf-vllm is running on port 8000[/yellow]")
         
         console.print("\n" + "="*60)
         console.print("🚀 [bold cyan]Starting training process...[/bold cyan]")
@@ -405,6 +419,9 @@ class VerifiersProvider:
             # Add callback to trainer
             if hasattr(self.trainer, 'add_callback'):
                 self.trainer.add_callback(callback)
+                console.print("[dim]Metrics callback registered successfully[/dim]")
+            else:
+                console.print("[yellow]Warning: Could not register metrics callback[/yellow]")
             
             # Run training with simple status updates
             import contextlib
@@ -424,16 +441,33 @@ class VerifiersProvider:
                 spinner_chars = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
                 i = 0
                 start_time = time.time()
+                status_messages = [
+                    "Initializing model weights",
+                    "Processing training batches",
+                    "Computing gradients",
+                    "Updating parameters",
+                    "Evaluating performance"
+                ]
+                msg_idx = 0
+                msg_timer = 0
+                
                 while not stop_spinner.is_set():
                     elapsed = time.time() - start_time
                     mins = int(elapsed // 60)
                     secs = int(elapsed % 60)
                     time_str = f"{mins}:{secs:02d}" if mins > 0 else f"{secs}s"
                     
-                    print(f"\r{spinner_chars[i % len(spinner_chars)]} Running GRPO training... [{time_str}]", end="", flush=True)
+                    # Change status message every 3 seconds
+                    if msg_timer >= 30:  # 30 * 0.1 = 3 seconds
+                        msg_idx = (msg_idx + 1) % len(status_messages)
+                        msg_timer = 0
+                    
+                    status = status_messages[msg_idx]
+                    print(f"\r{spinner_chars[i % len(spinner_chars)]} {status}... [{time_str}]                    ", end="", flush=True)
                     i += 1
+                    msg_timer += 1
                     time.sleep(0.1)
-                print("\r✅ Training completed!                              ", flush=True)
+                print("\r✅ Training completed!                                                      ", flush=True)
             
             # Start spinner in background
             spinner_thread = threading.Thread(target=show_spinner)
@@ -441,9 +475,39 @@ class VerifiersProvider:
             spinner_thread.start()
             
             try:
-                # Run training with output suppression
-                with contextlib.redirect_stdout(io.StringIO()):
-                    train_output = self.trainer.train()
+                # Add timeout and debug
+                import signal
+                
+                def timeout_handler(signum, frame):
+                    raise TimeoutError("Training is taking too long - possible hang detected")
+                
+                # Set a timeout for test mode (2 minutes)
+                if getattr(training, 'n_iterations', 1) == 1:  # Test mode
+                    signal.signal(signal.SIGALRM, timeout_handler)
+                    signal.alarm(120)  # 2 minute timeout
+                
+                console.print("\n[yellow]Starting GRPO trainer.train() call...[/yellow]")
+                console.print("[dim]If this hangs, there may be an issue with the model or environment[/dim]\n")
+                
+                # Run training without output suppression for debugging
+                train_output = self.trainer.train()
+                
+                # Cancel timeout
+                if getattr(training, 'n_iterations', 1) == 1:
+                    signal.alarm(0)
+                    
+            except TimeoutError as e:
+                stop_spinner.set()
+                console.print(f"\n[red]Training timeout: {e}[/red]")
+                console.print("[yellow]The training appears to be stuck. This could be due to:[/yellow]")
+                console.print("  • Model initialization issues")
+                console.print("  • vLLM server not responding")
+                console.print("  • Environment configuration problems")
+                raise
+            except Exception as e:
+                stop_spinner.set()
+                console.print(f"\n[red]Training error: {e}[/red]")
+                raise
             finally:
                 # Stop spinner
                 stop_spinner.set()
