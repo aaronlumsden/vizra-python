@@ -230,7 +230,6 @@ class VerifiersProvider:
             
             # Other settings
             warmup_ratio=0.1,
-            logging_steps=1,  # Log every step to see metrics
             save_steps=500,
             eval_steps=100,
             
@@ -247,7 +246,6 @@ class VerifiersProvider:
             # Configure logging to trigger callbacks
             logging_dir="./logs",
             logging_strategy="steps",  # Log at each step
-            logging_steps=1,  # Log every step
             report_to=[],  # Disable external reporting
             disable_tqdm=True,  # Disable progress bars from transformers
             log_level="info",  # Need info level for callbacks
