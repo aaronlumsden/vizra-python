@@ -687,13 +687,22 @@ class VizraVerifiersEnv(MultiTurnEnv):
         """
         from verifiers.envs.environment import ProcessedOutputs
         
+        import torch
+        
         # Tokenize prompts and completions
         prompt_tokens = processing_class(prompts, padding=True, truncation=True, 
                                         max_length=max_seq_len, return_tensors="pt")
         completion_tokens = processing_class(completions, padding=True, truncation=True,
                                            max_length=max_seq_len, return_tensors="pt")
         
-        # Create ProcessedOutputs object
+        # Create masks (1 for real tokens, 0 for padding)
+        prompt_mask = prompt_tokens.attention_mask
+        completion_mask = completion_tokens.attention_mask
+        
+        # Create dummy logprobs for now (required field)
+        completion_logprobs = torch.zeros_like(completion_tokens.input_ids, dtype=torch.float32)
+        
+        # Create ProcessedOutputs object with all required fields
         return ProcessedOutputs(
             prompts=prompts,
             completions=completions,
@@ -701,6 +710,9 @@ class VizraVerifiersEnv(MultiTurnEnv):
             completion_ids=completion_tokens.input_ids,
             prompt_attention_mask=prompt_tokens.attention_mask,
             completion_attention_mask=completion_tokens.attention_mask,
+            prompt_mask=prompt_mask,
+            completion_mask=completion_mask,
+            completion_logprobs=completion_logprobs,
             states=states,
             rewards=rewards,
             processing_class=processing_class,
