@@ -67,7 +67,8 @@ def list_trainings():
 @click.option('--iterations', '-i', type=int, help='Override number of iterations')
 @click.option('--verbose', '-v', is_flag=True, help='Show detailed output')
 @click.option('--output', '-o', help='Save results to file (JSON format)')
-def run_training(training_name, iterations, verbose, output):
+@click.option('--test', '-t', is_flag=True, help='Quick test run with minimal data (1 iteration, small batch)')
+def run_training(training_name, iterations, verbose, output, test):
     """Run a specific training routine."""
     try:
         runner = TrainingRunner()
@@ -80,9 +81,51 @@ def run_training(training_name, iterations, verbose, output):
             console.print(f"Run '[cyan]vizra train list[/cyan]' to see details.")
             sys.exit(1)
         
-        # Modify iterations if specified
-        if iterations:
-            # Get the training class and modify its iterations
+        # Handle test mode
+        if test:
+            # Get the training class for test modifications
+            train_class = runner.trainings[training_name]
+            
+            # Store original values
+            original_iterations = train_class.n_iterations
+            original_batch_size = getattr(train_class, 'batch_size', 32)
+            original_csv = getattr(train_class, 'csv_path', None)
+            
+            # Apply test settings
+            train_class.n_iterations = 1
+            train_class.batch_size = min(8, original_batch_size)  # Max 8 for test
+            
+            # Create mini dataset if CSV path exists
+            if original_csv and original_csv.endswith('.csv'):
+                import pandas as pd
+                from pathlib import Path
+                
+                csv_path = Path(original_csv)
+                if csv_path.exists():
+                    # Create a temporary mini dataset
+                    df = pd.read_csv(csv_path)
+                    mini_df = df.head(20)  # Just 20 samples
+                    
+                    # Save to temp file
+                    temp_csv = csv_path.parent / f"temp_test_{csv_path.name}"
+                    mini_df.to_csv(temp_csv, index=False)
+                    train_class.csv_path = str(temp_csv)
+                    
+                    # Mark for cleanup
+                    temp_file_to_cleanup = temp_csv
+                else:
+                    temp_file_to_cleanup = None
+            else:
+                temp_file_to_cleanup = None
+            
+            print_info(f"🧪 Test mode enabled:")
+            print_info(f"  • Iterations: {original_iterations} → 1")
+            print_info(f"  • Batch size: {original_batch_size} → {train_class.batch_size}")
+            print_info(f"  • Dataset: Using first 20 samples only")
+            console.print("")
+            
+        elif iterations:
+            # Regular iteration override (not test mode)
             train_class = runner.trainings[training_name]
             original_iterations = train_class.n_iterations
             train_class.n_iterations = iterations
@@ -90,7 +133,11 @@ def run_training(training_name, iterations, verbose, output):
         
         # Run training
         console.print()
-        console.print(f"{EMOJIS['rocket']} [bold green]Starting training: {training_name}[/bold green]")
+        if test:
+            console.print(f"{EMOJIS['rocket']} [bold yellow]Starting TEST training: {training_name}[/bold yellow]")
+            console.print("[dim]This is a quick test run with reduced data and iterations[/dim]")
+        else:
+            console.print(f"{EMOJIS['rocket']} [bold green]Starting training: {training_name}[/bold green]")
         
         if not verbose:
             # Create a rich progress display
@@ -200,9 +247,24 @@ def run_training(training_name, iterations, verbose, output):
         
         console.print()
         print_success("Training completed successfully!")
+        
+        # Cleanup test files if needed
+        if test and 'temp_file_to_cleanup' in locals() and temp_file_to_cleanup:
+            try:
+                temp_file_to_cleanup.unlink()
+            except:
+                pass  # Ignore cleanup errors
             
     except Exception as e:
         print_error(f"Error running training: {e}")
         if verbose:
             console.print_exception(show_locals=True)
+        
+        # Cleanup test files on error too
+        if test and 'temp_file_to_cleanup' in locals() and temp_file_to_cleanup:
+            try:
+                temp_file_to_cleanup.unlink()
+            except:
+                pass
+        
         sys.exit(1)
