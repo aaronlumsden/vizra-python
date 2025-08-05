@@ -111,18 +111,19 @@ class VerifiersProvider:
             # Don't print, we'll show this in the summary
         else:
             # Don't print warning
+            pass
         
         # Initialize model and tokenizer
         with console.status("[bold green]Loading model and tokenizer...") as status:
-        self.tokenizer = AutoTokenizer.from_pretrained(self.base_model)
-        if self.tokenizer.pad_token is None:
-            self.tokenizer.pad_token = self.tokenizer.eos_token
-        
-        self.model = AutoModelForCausalLM.from_pretrained(
-            self.base_model,
-            torch_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
-            # Remove device_map - let accelerate handle device placement for multi-GPU
-        )
+            self.tokenizer = AutoTokenizer.from_pretrained(self.base_model)
+            if self.tokenizer.pad_token is None:
+                self.tokenizer.pad_token = self.tokenizer.eos_token
+            
+            self.model = AutoModelForCausalLM.from_pretrained(
+                self.base_model,
+                torch_dtype=torch.bfloat16 if torch.cuda.is_available() else torch.float32,
+                # Remove device_map - let accelerate handle device placement for multi-GPU
+            )
         
         # Create Verifiers environment wrapper  
         console.print("\n🔧 Initializing Verifiers environment...")
