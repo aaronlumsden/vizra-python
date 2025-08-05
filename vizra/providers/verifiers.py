@@ -481,6 +481,13 @@ class VizraVerifiersEnv:
         from verifiers.envs.environment import GenerateOutputs
         import os
         
+        # Debug logging
+        print(f"DEBUG: a_generate inputs type: {type(inputs)}")
+        if hasattr(inputs, '__dict__'):
+            print(f"DEBUG: inputs attributes: {inputs.__dict__.keys()}")
+        elif isinstance(inputs, dict):
+            print(f"DEBUG: inputs keys: {inputs.keys()}")
+        
         # Initialize async client for vLLM
         client = AsyncOpenAI(
             base_url="http://localhost:8000/v1",
@@ -495,24 +502,33 @@ class VizraVerifiersEnv:
         # Extract prompts and answers from inputs
         if hasattr(inputs, 'prompt'):
             prompts = inputs.prompt
-            answers = inputs.answer if hasattr(inputs, 'answer') else [None] * len(prompts)
-            tasks = inputs.task if hasattr(inputs, 'task') else prompts
+            answers = inputs.answer if hasattr(inputs, 'answer') else [""] * len(prompts)
+            tasks = inputs.task if hasattr(inputs, 'task') else [""] * len(prompts)
             infos = inputs.info if hasattr(inputs, 'info') else [{}] * len(prompts)
+        elif isinstance(inputs, dict) and 'prompt' in inputs:
+            # Handle dict input format
+            prompts = inputs['prompt'] if isinstance(inputs['prompt'], list) else [inputs['prompt']]
+            answers = inputs.get('answer', [""] * len(prompts))
+            tasks = inputs.get('task', [""] * len(prompts))
+            infos = inputs.get('info', [{}] * len(prompts))
         else:
             # Fallback for list input
             prompts = inputs if isinstance(inputs, list) else [inputs]
-            answers = [None] * len(prompts)
-            tasks = prompts
+            answers = [""] * len(prompts)
+            tasks = [""] * len(prompts)
             infos = [{}] * len(prompts)
         
         completions = []
         rewards = []
         
         for i, prompt in enumerate(prompts):
+            # Ensure prompt is a string
+            prompt_text = str(prompt) if prompt else ""
+            
             # Create messages with system prompt and user input
             messages = [
                 {"role": "system", "content": self.instructions},
-                {"role": "user", "content": prompt}
+                {"role": "user", "content": prompt_text}
             ]
             
             try:
@@ -532,7 +548,7 @@ class VizraVerifiersEnv:
             completions.append(response)
             
             # Calculate reward if we have the training instance
-            if hasattr(self, 'training') and answers[i] is not None:
+            if hasattr(self, 'training') and answers[i] and answers[i] != "":
                 # Create row data for reward calculation
                 row_data = {
                     'question': prompt,
@@ -545,6 +561,13 @@ class VizraVerifiersEnv:
             
             rewards.append(reward)
         
+        # Ensure all values are the correct type
+        prompts = [str(p) for p in prompts]
+        answers = [str(a) if a else "" for a in answers]
+        tasks = [str(t) if t else "" for t in tasks]
+        completions = [str(c) for c in completions]
+        states = [{}] * len(prompts)  # Empty dict instead of None
+        
         # Return GenerateOutputs object
         return GenerateOutputs(
             prompt=prompts,
@@ -552,7 +575,7 @@ class VizraVerifiersEnv:
             task=tasks,
             info=infos,
             completion=completions,
-            state=[None] * len(prompts),  # No specific state tracking
+            state=states,
             reward=rewards,
             metrics={}  # No additional metrics for now
         )
