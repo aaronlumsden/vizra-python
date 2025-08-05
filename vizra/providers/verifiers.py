@@ -363,18 +363,21 @@ class VizraVerifiersEnv(MultiTurnEnv):
         # Get agent instructions
         self.instructions = training.agent_class._get_instructions()
         
-        # Initialize dataset attributes
+        # Initialize dataset attributes (will be created lazily)
         self.dataset = None
         self.eval_dataset = None
-        
-        # Create datasets immediately
-        self._create_datasets()
     
     def get_dataset(self):
         """Return the dataset for GRPOTrainer."""
         if self.dataset is None:
             # Create dataset if not already created
-            from datasets import Dataset
+            try:
+                from datasets import Dataset
+            except ImportError as e:
+                raise ImportError(
+                    f"Failed to import datasets library: {e}\n"
+                    "Install with: pip install datasets"
+                )
             
             print(f"Creating training dataset from {len(self.data_rows)} rows...")
             
@@ -399,11 +402,19 @@ class VizraVerifiersEnv(MultiTurnEnv):
                 }
                 dataset_entries.append(entry)
             
-            self.dataset = Dataset.from_list(dataset_entries)
-            print(f"Created dataset with {len(self.dataset)} entries")
-            print(f"Dataset columns: {self.dataset.column_names}")
-            if len(self.dataset) > 0:
-                print(f"First entry: {self.dataset[0]}")
+            try:
+                self.dataset = Dataset.from_list(dataset_entries)
+                print(f"Created dataset with {len(self.dataset)} entries")
+                print(f"Dataset columns: {self.dataset.column_names}")
+                if len(self.dataset) > 0:
+                    # Print first entry for debugging (truncate long strings)
+                    first_entry = self.dataset[0]
+                    debug_entry = {k: (v[:100] + '...' if isinstance(v, str) and len(v) > 100 else v) 
+                                 for k, v in first_entry.items()}
+                    print(f"First entry (truncated): {debug_entry}")
+            except Exception as e:
+                print(f"Error creating dataset: {e}")
+                raise RuntimeError(f"Failed to create training dataset: {e}")
         
         return self.dataset
     
@@ -411,7 +422,13 @@ class VizraVerifiersEnv(MultiTurnEnv):
         """Return the evaluation dataset for GRPOTrainer."""
         if not hasattr(self, 'eval_dataset') or self.eval_dataset is None:
             # Create eval dataset if not already created
-            from datasets import Dataset
+            try:
+                from datasets import Dataset
+            except ImportError as e:
+                raise ImportError(
+                    f"Failed to import datasets library: {e}\n"
+                    "Install with: pip install datasets"
+                )
             
             # Convert eval data to prompts
             dataset_entries = []
@@ -434,7 +451,12 @@ class VizraVerifiersEnv(MultiTurnEnv):
                 }
                 dataset_entries.append(entry)
             
-            self.eval_dataset = Dataset.from_list(dataset_entries)
+            try:
+                self.eval_dataset = Dataset.from_list(dataset_entries)
+                print(f"Created eval dataset with {len(self.eval_dataset)} entries")
+            except Exception as e:
+                print(f"Error creating eval dataset: {e}")
+                raise RuntimeError(f"Failed to create evaluation dataset: {e}")
         
         return self.eval_dataset
     
@@ -783,8 +805,3 @@ class VizraVerifiersEnv(MultiTurnEnv):
         else:
             return {}
     
-    def _create_datasets(self):
-        """Create datasets immediately on initialization."""
-        # This ensures datasets are available as attributes
-        self.dataset = self.get_dataset()
-        self.eval_dataset = self.get_eval_dataset()
