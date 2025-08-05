@@ -298,6 +298,12 @@ class VerifiersProvider:
                     self.baseline_performance = None
                     self.shown_metrics = False
                 
+                def on_step_begin(self, args, state, control, **kwargs):
+                    """Called at the beginning of each step."""
+                    if state.global_step % 5 == 0:
+                        console.print(f"[dim]Processing step {state.global_step}...[/dim]", end="\r")
+                    return control
+                
                 def on_log(self, args, state, control, logs=None, **kwargs):
                     """Called when trainer logs metrics."""
                     if logs:
@@ -403,11 +409,12 @@ class VerifiersProvider:
             callback.shown_metrics = False
             
             with Progress(
-                SpinnerColumn(),
+                SpinnerColumn(spinner_name="dots"),
                 TextColumn("[progress.description]{task.description}"),
                 TimeElapsedColumn(),
                 console=console,
-                transient=False
+                transient=False,
+                refresh_per_second=4
             ) as progress:
                 task = progress.add_task("[cyan]Running GRPO training steps...", total=None)
                 
