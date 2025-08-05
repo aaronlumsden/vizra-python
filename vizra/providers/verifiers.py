@@ -664,11 +664,40 @@ class VizraVerifiersEnv(MultiTurnEnv):
             metrics={}  # No additional metrics for now
         )
     
-    def process_env_results_vllm(self, env_results, prompts, **kwargs):
-        """Process results from vLLM generation - required by Verifiers."""
-        # For vLLM, the results are already in the correct format
-        # This method is called after a_generate to do any post-processing
-        return env_results
+    def process_env_results_vllm(self, prompts, completions, states, rewards, 
+                                  processing_class, max_seq_len, 
+                                  mask_env_responses=False, 
+                                  mask_truncated_completions=False,
+                                  zero_truncated_completions=False, **kwargs):
+        """Process results from vLLM generation - required by Verifiers.
+        
+        Args:
+            prompts: List of prompts
+            completions: List of completions from vLLM
+            states: List of states
+            rewards: List of rewards
+            processing_class: Tokenizer/processor
+            max_seq_len: Maximum sequence length
+            mask_env_responses: Whether to mask environment responses
+            mask_truncated_completions: Whether to mask truncated completions
+            zero_truncated_completions: Whether to zero out truncated completions
+        
+        Returns:
+            Processed results object
+        """
+        from verifiers.envs.environment import GenerateOutputs
+        
+        # For now, return the results as-is in the expected format
+        return GenerateOutputs(
+            prompt=prompts,
+            answer=["" for _ in prompts],  # Empty answers for now
+            task=["chord_identification" for _ in prompts],
+            info=[{} for _ in prompts],
+            completion=completions,
+            state=states,
+            reward=rewards,
+            metrics={}
+        )
     
     def setup_state(self, state, **kwargs):
         """Setup initial state for a new rollout."""
