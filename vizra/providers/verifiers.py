@@ -86,8 +86,25 @@ class VerifiersProvider:
         os.environ["TOKENIZERS_PARALLELISM"] = "false"
         os.environ["HF_DATASETS_DISABLE_PROGRESS_BARS"] = "1"
         os.environ["NCCL_P2P_DISABLE"] = "1"  # Disable peer-to-peer to avoid NCCL warnings
+        os.environ["PYTHONWARNINGS"] = "ignore"  # Ignore Python warnings
+        os.environ["CUDA_LAUNCH_BLOCKING"] = "0"
+        os.environ["VLLM_LOGGING_LEVEL"] = "ERROR"
+        
+        # Suppress warnings
+        import warnings
+        warnings.filterwarnings("ignore")
+        
+        # Redirect stdout temporarily to suppress INFO messages
+        import sys
+        import io
+        old_stdout = sys.stdout
+        old_stderr = sys.stderr
         
         try:
+            # Disable datasets progress bars before importing
+            import datasets
+            datasets.disable_progress_bar()
+            
             import verifiers
             from verifiers.trainers.grpo_trainer import GRPOTrainer
             from verifiers.trainers.grpo_config import GRPOConfig
@@ -214,13 +231,20 @@ class VerifiersProvider:
             log_level_replica="error",
         )
         
-        # Initialize GRPO trainer with custom environment
-        self.trainer = GRPOTrainer(
-            model=self.model,
-            env=env,  # Pass our Verifiers environment
-            args=config,
-            processing_class=self.tokenizer,
-        )
+        # Initialize GRPO trainer with custom environment (suppress output)
+        sys.stdout = io.StringIO()
+        sys.stderr = io.StringIO()
+        try:
+            self.trainer = GRPOTrainer(
+                model=self.model,
+                env=env,  # Pass our Verifiers environment
+                args=config,
+                processing_class=self.tokenizer,
+            )
+        finally:
+            # Restore stdout/stderr
+            sys.stdout = old_stdout
+            sys.stderr = old_stderr
         
         # Show training configuration
         if metric_weights:
