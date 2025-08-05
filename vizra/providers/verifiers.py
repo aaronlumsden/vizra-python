@@ -296,6 +296,7 @@ class VerifiersProvider:
                     }
                     self.iteration = 0
                     self.baseline_performance = None
+                    self.shown_metrics = False
                 
                 def on_log(self, args, state, control, logs=None, **kwargs):
                     """Called when trainer logs metrics."""
@@ -390,10 +391,30 @@ class VerifiersProvider:
             if hasattr(self.trainer, 'add_callback'):
                 self.trainer.add_callback(callback)
             
-            # Run training (suppress print output)
+            # Run training with progress indicator
             import contextlib
-            with contextlib.redirect_stdout(io.StringIO()):
-                train_output = self.trainer.train()
+            from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
+            
+            console.print("\n🔄 [bold cyan]Training in progress...[/bold cyan]")
+            console.print("[dim]This may take a few moments for the first iteration[/dim]\n")
+            
+            # Track if we've shown any metrics
+            callback.shown_metrics = False
+            
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                TimeElapsedColumn(),
+                console=console,
+                transient=False
+            ) as progress:
+                task = progress.add_task("[cyan]Running GRPO training steps...", total=None)
+                
+                # Run training with output suppression
+                with contextlib.redirect_stdout(io.StringIO()):
+                    train_output = self.trainer.train()
+                
+                progress.update(task, description="[green]Training completed!")
             
             # Extract metrics from training
             if hasattr(train_output, 'metrics'):
