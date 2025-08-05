@@ -89,8 +89,13 @@ class VerifiersProvider:
         os.environ["PYTHONWARNINGS"] = "ignore"  # Ignore Python warnings
         os.environ["CUDA_LAUNCH_BLOCKING"] = "0"
         os.environ["VLLM_LOGGING_LEVEL"] = "ERROR"
-        os.environ["RANK"] = "0"  # Set rank to avoid NCCL warning
+        
+        # Set distributed training environment variables for single GPU
+        os.environ["RANK"] = "0"
         os.environ["LOCAL_RANK"] = "0"
+        os.environ["WORLD_SIZE"] = "1"  # Single GPU training
+        os.environ["MASTER_ADDR"] = "127.0.0.1"
+        os.environ["MASTER_PORT"] = "29500"
         
         # Suppress warnings
         import warnings
