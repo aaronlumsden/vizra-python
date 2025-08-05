@@ -370,6 +370,7 @@ class VerifiersProvider:
                             # Show metrics (without clearing for better compatibility)
                             console.print(f"\n🎯 [bold cyan]Step {self.iteration}[/bold cyan]")
                             console.print(metrics_table)
+                            self.shown_metrics = True
                             
                             # Show performance improvement
                             if self.baseline_performance is None:
@@ -415,6 +416,11 @@ class VerifiersProvider:
                     train_output = self.trainer.train()
                 
                 progress.update(task, description="[green]Training completed!")
+            
+            # If no metrics were shown during training, show a summary
+            if not callback.shown_metrics:
+                console.print("\n[yellow]Note: Metrics callback was not triggered during training.[/yellow]")
+                console.print("[dim]This can happen with very short training runs.[/dim]")
             
             # Extract metrics from training
             if hasattr(train_output, 'metrics'):
