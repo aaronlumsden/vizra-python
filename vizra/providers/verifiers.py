@@ -271,7 +271,10 @@ class VerifiersProvider:
         # Show training configuration
         if metric_weights:
             console.print(f"Metric weights: Exact {metric_weights.get('exact_match', 0)*100:.0f}% | Tool {metric_weights.get('tool_usage', 0)*100:.0f}% | Format {metric_weights.get('chord_format', 0)*100:.0f}%")
-        console.print()
+        
+        console.print("\n" + "="*60)
+        console.print("🚀 [bold cyan]Starting training process...[/bold cyan]")
+        console.print("="*60 + "\n")
         
         # Training history for Vizra
         training_history = []
@@ -282,6 +285,7 @@ class VerifiersProvider:
         try:
             # Store reference to self for callback
             provider_self = self
+            stop_spinner = None  # Will be set later
             
             # Custom callback to capture training progress
             from transformers import TrainerCallback
@@ -300,8 +304,12 @@ class VerifiersProvider:
                 
                 def on_step_begin(self, args, state, control, **kwargs):
                     """Called at the beginning of each step."""
-                    if state.global_step % 5 == 0:
-                        console.print(f"[dim]Processing step {state.global_step}...[/dim]", end="\r")
+                    # Don't print during spinner
+                    return control
+                
+                def on_train_begin(self, args, state, control, **kwargs):
+                    """Called at the beginning of training."""
+                    console.print("[dim]Initializing training loop...[/dim]")
                     return control
                 
                 def on_log(self, args, state, control, logs=None, **kwargs):
@@ -398,31 +406,48 @@ class VerifiersProvider:
             if hasattr(self.trainer, 'add_callback'):
                 self.trainer.add_callback(callback)
             
-            # Run training with progress indicator
+            # Run training with simple status updates
             import contextlib
-            from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
+            import threading
+            import time
             
-            console.print("\n🔄 [bold cyan]Training in progress...[/bold cyan]")
+            console.print("🔄 [bold cyan]Training in progress...[/bold cyan]")
             console.print("[dim]This may take a few moments for the first iteration[/dim]\n")
             
             # Track if we've shown any metrics
             callback.shown_metrics = False
             
-            with Progress(
-                SpinnerColumn(spinner_name="dots"),
-                TextColumn("[progress.description]{task.description}"),
-                TimeElapsedColumn(),
-                console=console,
-                transient=False,
-                refresh_per_second=4
-            ) as progress:
-                task = progress.add_task("[cyan]Running GRPO training steps...", total=None)
-                
+            # Create a simple spinner thread
+            stop_spinner = threading.Event()
+            
+            def show_spinner():
+                spinner_chars = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+                i = 0
+                start_time = time.time()
+                while not stop_spinner.is_set():
+                    elapsed = time.time() - start_time
+                    mins = int(elapsed // 60)
+                    secs = int(elapsed % 60)
+                    time_str = f"{mins}:{secs:02d}" if mins > 0 else f"{secs}s"
+                    
+                    print(f"\r{spinner_chars[i % len(spinner_chars)]} Running GRPO training... [{time_str}]", end="", flush=True)
+                    i += 1
+                    time.sleep(0.1)
+                print("\r✅ Training completed!                              ", flush=True)
+            
+            # Start spinner in background
+            spinner_thread = threading.Thread(target=show_spinner)
+            spinner_thread.daemon = True
+            spinner_thread.start()
+            
+            try:
                 # Run training with output suppression
                 with contextlib.redirect_stdout(io.StringIO()):
                     train_output = self.trainer.train()
-                
-                progress.update(task, description="[green]Training completed!")
+            finally:
+                # Stop spinner
+                stop_spinner.set()
+                spinner_thread.join(timeout=1)
             
             # If no metrics were shown during training, show a summary
             if not callback.shown_metrics:

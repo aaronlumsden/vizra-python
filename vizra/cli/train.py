@@ -139,7 +139,10 @@ def run_training(training_name, iterations, verbose, output, test):
         else:
             console.print(f"{EMOJIS['rocket']} [bold green]Starting training: {training_name}[/bold green]")
         
-        if not verbose:
+        # In test mode or with verifiers provider, use verbose mode to see actual progress
+        force_verbose = test or (training_name and 'verifiers' in training_name.lower())
+        
+        if not verbose and not force_verbose:
             # Create a rich progress display
             with Progress(
                 SpinnerColumn(),
