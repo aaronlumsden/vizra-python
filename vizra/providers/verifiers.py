@@ -107,13 +107,18 @@ class VerifiersProvider:
         print("\n🔧 Initializing Verifiers environment...")
         env = VizraVerifiersEnv(training, data_rows, eval_data_rows)
         
-        # Get datasets from environment
+        # Get datasets from environment and set as attributes
         train_dataset = env.get_dataset()
         eval_dataset = env.get_eval_dataset() if eval_data_rows else None
+        
+        # Set datasets as attributes on the environment (in case GRPOTrainer expects them)
+        env.dataset = train_dataset
+        env.eval_dataset = eval_dataset
         
         print(f"📊 Training dataset size: {len(train_dataset)}")
         if eval_dataset:
             print(f"📊 Evaluation dataset size: {len(eval_dataset)}")
+        print(f"📊 Dataset columns: {train_dataset.column_names if train_dataset else 'None'}")
         
         # Configure GRPO training
         print(f"\n🚀 Initializing GRPO trainer...")
@@ -154,14 +159,12 @@ class VerifiersProvider:
             local_rank=-1,
         )
         
-        # Initialize GRPO trainer with custom environment and datasets
+        # Initialize GRPO trainer with custom environment
         self.trainer = GRPOTrainer(
             model=self.model,
             env=env,  # Pass our Verifiers environment
             args=config,
             processing_class=self.tokenizer,
-            train_dataset=train_dataset,  # Pass dataset directly
-            eval_dataset=eval_dataset,    # Pass eval dataset if available
         )
         
         print("✅ GRPO trainer initialized successfully!")
@@ -360,15 +363,20 @@ class VizraVerifiersEnv(MultiTurnEnv):
         # Get agent instructions
         self.instructions = training.agent_class._get_instructions()
         
-        # Store dataset for GRPOTrainer
+        # Initialize dataset attributes
         self.dataset = None
         self.eval_dataset = None
+        
+        # Create datasets immediately
+        self._create_datasets()
     
     def get_dataset(self):
         """Return the dataset for GRPOTrainer."""
         if self.dataset is None:
             # Create dataset if not already created
             from datasets import Dataset
+            
+            print(f"Creating training dataset from {len(self.data_rows)} rows...")
             
             # Convert data to prompts
             dataset_entries = []
@@ -392,6 +400,10 @@ class VizraVerifiersEnv(MultiTurnEnv):
                 dataset_entries.append(entry)
             
             self.dataset = Dataset.from_list(dataset_entries)
+            print(f"Created dataset with {len(self.dataset)} entries")
+            print(f"Dataset columns: {self.dataset.column_names}")
+            if len(self.dataset) > 0:
+                print(f"First entry: {self.dataset[0]}")
         
         return self.dataset
     
@@ -770,3 +782,9 @@ class VizraVerifiersEnv(MultiTurnEnv):
             return normalized
         else:
             return {}
+    
+    def _create_datasets(self):
+        """Create datasets immediately on initialization."""
+        # This ensures datasets are available as attributes
+        self.dataset = self.get_dataset()
+        self.eval_dataset = self.get_eval_dataset()
