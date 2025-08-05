@@ -475,9 +475,10 @@ class VizraVerifiersEnv:
         
         return observation, reward, terminated, truncated, info
     
-    async def a_generate(self, prompts, **kwargs):
+    async def a_generate(self, inputs, **kwargs):
         """Async generation method required by Verifiers."""
         from openai import AsyncOpenAI
+        from verifiers.envs.environment import GenerateOutputs
         import os
         
         # Initialize async client for vLLM
@@ -491,8 +492,23 @@ class VizraVerifiersEnv:
         temperature = kwargs.get('temperature', 0.7)
         model = kwargs.get('model', 'Qwen/Qwen2.5-0.5B-Instruct')
         
-        responses = []
-        for prompt in prompts:
+        # Extract prompts and answers from inputs
+        if hasattr(inputs, 'prompt'):
+            prompts = inputs.prompt
+            answers = inputs.answer if hasattr(inputs, 'answer') else [None] * len(prompts)
+            tasks = inputs.task if hasattr(inputs, 'task') else prompts
+            infos = inputs.info if hasattr(inputs, 'info') else [{}] * len(prompts)
+        else:
+            # Fallback for list input
+            prompts = inputs if isinstance(inputs, list) else [inputs]
+            answers = [None] * len(prompts)
+            tasks = prompts
+            infos = [{}] * len(prompts)
+        
+        completions = []
+        rewards = []
+        
+        for i, prompt in enumerate(prompts):
             # Create messages with system prompt and user input
             messages = [
                 {"role": "system", "content": self.instructions},
@@ -513,9 +529,33 @@ class VizraVerifiersEnv:
                 print(f"Error calling vLLM: {e}")
                 response = "Error generating response"
             
-            responses.append(response)
+            completions.append(response)
+            
+            # Calculate reward if we have the training instance
+            if hasattr(self, 'training') and answers[i] is not None:
+                # Create row data for reward calculation
+                row_data = {
+                    'question': prompt,
+                    'expected_output': answers[i],
+                    'expected_chord': answers[i]
+                }
+                reward = self.training.calculate_reward(row_data, response)
+            else:
+                reward = 0.0
+            
+            rewards.append(reward)
         
-        return responses
+        # Return GenerateOutputs object
+        return GenerateOutputs(
+            prompt=prompts,
+            answer=answers,
+            task=tasks,
+            info=infos,
+            completion=completions,
+            state=[None] * len(prompts),  # No specific state tracking
+            reward=rewards,
+            metrics={}  # No additional metrics for now
+        )
     
     def _execute_tool(self, tool_name, tool_input):
         """Execute a tool and return its result."""
