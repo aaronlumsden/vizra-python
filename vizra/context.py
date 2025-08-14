@@ -1,5 +1,6 @@
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, field
+from .config import config
 
 
 @dataclass
@@ -9,7 +10,7 @@ class AgentContext:
     """
     messages: List[Dict[str, Any]] = field(default_factory=list)
     tool_call_count: int = 0
-    max_tool_iterations: int = 3
+    max_tool_iterations: int = field(default_factory=lambda: config('agent.max_tool_iterations', 3))
     metadata: Dict[str, Any] = field(default_factory=dict)
     
     def add_message(self, role: str, content: str, **kwargs) -> None:

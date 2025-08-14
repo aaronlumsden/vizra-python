@@ -14,7 +14,8 @@ settings = {
         'temperature': 0.7,
         'max_tokens': 2000,
         'timeout': 30,
-        'max_retries': 3,
+        # Optional: Set a custom API base URL for proxies or custom endpoints
+        # 'api_base': 'https://custom-proxy.com/v1',
     },
     
     # Agent Configuration
@@ -30,7 +31,7 @@ settings = {
         'batch_size': 32,
         'learning_rate': 1e-4,
         'n_iterations': 100,
-        'checkpoint_dir': './checkpoints',
+        'results_dir': './training/results',
         'gradient_accumulation_steps': 1,
         'gradient_checkpointing': True,
     },
@@ -42,21 +43,12 @@ settings = {
         'save_responses': True,
     },
     
-    # API Keys and Endpoints (using environment variables)
-    'api': {
-        'openai': {
-            'key': os.getenv('OPENAI_API_KEY'),
-            'base_url': os.getenv('OPENAI_BASE_URL'),  # Optional custom endpoint
-        },
-        # Add your own API configurations
-        'anthropic': {
-            'key': os.getenv('ANTHROPIC_API_KEY'),
-        },
-        'custom': {
-            'key': os.getenv('MY_CUSTOM_API_KEY'),
-            'endpoint': 'https://api.example.com/v1',
-        },
-    },
+    # Note: API keys should be set as environment variables:
+    # - OPENAI_API_KEY for OpenAI models
+    # - ANTHROPIC_API_KEY for Claude models
+    # - AZURE_API_KEY, AZURE_API_BASE, AZURE_API_VERSION for Azure
+    # - And other provider-specific environment variables
+    # LiteLLM will automatically read these environment variables
     
     # Provider-specific settings
     'providers': {
@@ -83,18 +75,15 @@ settings = {
         },
     },
     
-    # Custom configurations - add anything you need!
-    'my_custom_config': {
-        'special_value': 42,
-        'nested': {
-            'deeply': {
-                'nested_value': 'Hello, World!',
-            },
-        },
-    },
 }
 
-# You can also define configuration programmatically
-if os.getenv('ENVIRONMENT') == 'production':
-    settings['llm']['temperature'] = 0.3  # More deterministic in production
-    settings['features']['debug_mode'] = False
+# Example: Environment-specific configuration
+# if os.getenv('ENVIRONMENT') == 'production':
+#     settings['llm']['temperature'] = 0.3  # More deterministic in production
+#     settings['features']['debug_mode'] = False
+
+# Example: Custom configuration for your own use
+# settings['my_custom_config'] = {
+#     'special_value': 42,
+#     'api_endpoint': 'https://my-api.example.com',
+# }

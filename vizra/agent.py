@@ -6,6 +6,7 @@ from litellm import completion
 from .tool import ToolInterface
 from .context import AgentContext
 from .exceptions import AgentExecutionError
+from .config import config
 
 
 class BaseAgent:
@@ -90,10 +91,20 @@ class BaseAgent:
                     except Exception:
                         pass  # Don't let hook errors interrupt execution
                     
-                    response = completion(
-                        model=cls.model,
-                        messages=context.messages
-                    )
+                    # Build kwargs with config values
+                    kwargs = {
+                        'model': config('llm.model', cls.model),
+                        'messages': context.messages,
+                        'temperature': config('llm.temperature', 0.7),
+                        'max_tokens': config('llm.max_tokens', 2000),
+                        'timeout': config('llm.timeout', 30),
+                    }
+                    
+                    # Only add api_base if explicitly configured
+                    if config('llm.api_base'):
+                        kwargs['api_base'] = config('llm.api_base')
+                    
+                    response = completion(**kwargs)
                 else:
                     # Normal request with tools
                     # Call hook before LLM call
@@ -102,11 +113,21 @@ class BaseAgent:
                     except Exception:
                         pass  # Don't let hook errors interrupt execution
                     
-                    response = completion(
-                        model=cls.model,
-                        messages=context.messages,
-                        tools=tool_definitions if tool_definitions else None
-                    )
+                    # Build kwargs with config values
+                    kwargs = {
+                        'model': config('llm.model', cls.model),
+                        'messages': context.messages,
+                        'tools': tool_definitions if tool_definitions else None,
+                        'temperature': config('llm.temperature', 0.7),
+                        'max_tokens': config('llm.max_tokens', 2000),
+                        'timeout': config('llm.timeout', 30),
+                    }
+                    
+                    # Only add api_base if explicitly configured
+                    if config('llm.api_base'):
+                        kwargs['api_base'] = config('llm.api_base')
+                    
+                    response = completion(**kwargs)
                 
                 # Call hook after LLM response
                 try:
@@ -181,10 +202,20 @@ class BaseAgent:
                         except Exception:
                             pass  # Don't let hook errors interrupt execution
                         
-                        final_response = completion(
-                            model=cls.model,
-                            messages=context.messages
-                        )
+                        # Build kwargs with config values
+                        kwargs = {
+                            'model': config('llm.model', cls.model),
+                            'messages': context.messages,
+                            'temperature': config('llm.temperature', 0.7),
+                            'max_tokens': config('llm.max_tokens', 2000),
+                            'timeout': config('llm.timeout', 30),
+                        }
+                        
+                        # Only add api_base if explicitly configured
+                        if config('llm.api_base'):
+                            kwargs['api_base'] = config('llm.api_base')
+                        
+                        final_response = completion(**kwargs)
                         
                         # Call hook after LLM response
                         try:

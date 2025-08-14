@@ -12,6 +12,7 @@ import numpy as np
 from datetime import datetime
 from ..agent import BaseAgent
 from ..context import AgentContext
+from ..config import config
 
 
 class BaseRLTraining:
@@ -38,6 +39,16 @@ class BaseRLTraining:
     
     def __init__(self):
         """Initialize training."""
+        # Override class attributes with config values if not already set by subclass
+        if self.algorithm == "ppo":  # Default value, so check config
+            self.algorithm = config('training.algorithm', 'ppo')
+        if self.learning_rate == 1e-4:  # Default value, so check config
+            self.learning_rate = config('training.learning_rate', 1e-4)
+        if self.batch_size == 32:  # Default value, so check config
+            self.batch_size = config('training.batch_size', 32)
+        if self.n_iterations == 100:  # Default value, so check config
+            self.n_iterations = config('training.n_iterations', 100)
+        
         self.agent_class: Optional[type[BaseAgent]] = None
         self.trajectories: List[Dict[str, Any]] = []
         self.training_history: List[Dict[str, Any]] = []

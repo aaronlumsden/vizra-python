@@ -18,6 +18,7 @@ from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeElapsedColumn
 from rich.panel import Panel
 from rich.table import Table
+from vizra.config import config
 
 # Initialize console for beautiful output
 console = Console()
@@ -32,7 +33,7 @@ class VerifiersProvider:
     """
     
     def __init__(self, model_name: str, base_model: str, 
-                 inference_base_url: str = "http://localhost:8000/v1", **kwargs):
+                 inference_base_url: str = None, **kwargs):
         """
         Initialize Verifiers provider.
         
@@ -44,7 +45,8 @@ class VerifiersProvider:
         """
         self.model_name = model_name
         self.base_model = base_model
-        self.inference_base_url = inference_base_url
+        # Use config for inference URL if not provided
+        self.inference_base_url = inference_base_url or config('providers.verifiers.inference_url', 'http://localhost:8000/v1')
         self.config = kwargs
         
         # Will be initialized on first use
@@ -151,9 +153,9 @@ class VerifiersProvider:
         console.print(f"\n🎯 Initializing GRPO trainer...")
         
         # Create GRPO config with Verifiers' expected parameters
-        config = GRPOConfig(
+        grpo_config = GRPOConfig(
             # Output directory
-            output_dir=f"./outputs/{self.model_name}-grpo",
+            output_dir=f"{config('paths.outputs', './outputs')}/{self.model_name}-grpo",
             
             # Training hyperparameters - check self.config first, then training attributes
             learning_rate=training.learning_rate,
@@ -193,7 +195,7 @@ class VerifiersProvider:
         self.trainer = GRPOTrainer(
             model=self.model,
             env=env,  # Pass our Verifiers environment
-            args=config,
+            args=grpo_config,
             processing_class=self.tokenizer,
         )
         
@@ -265,7 +267,7 @@ class VerifiersProvider:
         training_time = time.time() - training_start_time
         
         # Create results directory
-        results_dir = Path("./training/results")
+        results_dir = Path(config('training.results_dir', './training/results'))
         results_dir.mkdir(parents=True, exist_ok=True)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         

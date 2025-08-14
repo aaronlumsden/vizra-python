@@ -9,6 +9,7 @@ from datetime import datetime
 import pandas as pd
 import click
 from ..evaluation import EvaluationRunner
+from ..config import config
 from .display import (
     console, print_error, print_success, print_warning, print_info,
     create_table, create_panel, create_progress_bar, print_json,
@@ -158,7 +159,7 @@ def run_evaluation(evaluation_name, output, verbose, limit, detailed, json):
         
         # Always save results to evaluations/results folder
         # Create results directory if it doesn't exist
-        results_dir = Path('evaluations/results')
+        results_dir = Path(config('evaluation.results_dir', 'evaluations/results'))
         results_dir.mkdir(parents=True, exist_ok=True)
         
         # Get model name from results
