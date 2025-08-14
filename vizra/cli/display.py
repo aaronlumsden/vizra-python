@@ -48,6 +48,7 @@ EMOJIS = {
     'document': '📄',
     'folder': '📁',
     'clock': '⏱️',
+    'star': '⭐',
     'magnify': '🔍',
     'pencil': '✏️',
     'book': '📚'

@@ -31,10 +31,12 @@ def cli(ctx):
 from .eval import eval_group
 from .train import train_group
 from .make import make_group
+from .init import init_command
 
 cli.add_command(eval_group)
 cli.add_command(train_group)
 cli.add_command(make_group)
+cli.add_command(init_command)
 
 
 # Add a simple status command at the root level
@@ -51,8 +53,10 @@ def status():
 {EMOJIS['checkmark']} [bold green]Vizra v{__version__} is installed and ready![/bold green]
 
 [bold cyan]Available Commands:[/bold cyan]
-  {EMOJIS['chart']} [cyan]vizra eval[/cyan]  - Run and manage evaluations
-  {EMOJIS['rocket']} [cyan]vizra train[/cyan] - Run and manage training
+  {EMOJIS['sparkles']} [cyan]vizra init[/cyan]   - Initialize a new Vizra project
+  {EMOJIS['chart']} [cyan]vizra eval[/cyan]   - Run and manage evaluations
+  {EMOJIS['rocket']} [cyan]vizra train[/cyan]  - Run and manage training
+  {EMOJIS['package']} [cyan]vizra make[/cyan]   - Generate boilerplate code
   {EMOJIS['info']} [cyan]vizra status[/cyan] - Show this status
 
 [dim]Run 'vizra --help' for more information.[/dim]
