@@ -64,6 +64,12 @@ class CodeReviewerAgent(BaseAgent):
     instructions: str = 'You review code for clarity and best practices.'
     model: str = 'gpt-4o'
     
+# Or use a markdown file for longer instructions:
+class DetailedReviewerAgent(BaseAgent):
+    name: str = 'detailed_reviewer'
+    instructions_file: str = 'reviewer_prompt.md'  # Loads from prompts/ directory
+    model: str = 'gpt-4o'
+    
 # Single response
 feedback: str = CodeReviewerAgent.run("def add(x,y): return x+y")
 
@@ -79,12 +85,11 @@ response2: str = reviewer.run("What about error handling?")  # Remembers previou
 Tools let your agents actually do things. They're just classes with two methods:
 
 ```python
-from typing import Dict, Any
 from vizra import ToolInterface, AgentContext, BaseAgent
 import json
 
 class SearchTool(ToolInterface):
-    def definition(self) -> Dict[str, Any]:
+    def definition(self):
         return {
             'name': 'search',
             'description': 'Search for information',
@@ -97,7 +102,7 @@ class SearchTool(ToolInterface):
             }
         }
     
-    def execute(self, arguments: Dict[str, Any], context: AgentContext) -> str:
+    def execute(self, arguments, context):
         query = arguments['query']
         # Your search logic here
         results = perform_search(query)
@@ -231,16 +236,15 @@ See `vizra_config.py.example` for a complete template.
 Test your agents with real data:
 
 ```python
-from typing import List
 from vizra.evaluation import BaseEvaluation
-from vizra.evaluation.metrics import ExactMatchMetric, ContainsMetric, BaseMetric
+from vizra.evaluation.metrics import ExactMatchMetric, ContainsMetric
 
 class MyEvaluation(BaseEvaluation):
     name: str = 'test_my_agent'
     agent_name: str = 'my_agent'
     csv_path: str = 'data/test_cases.csv'
     
-    metrics: List[BaseMetric] = [
+    metrics = [
         ExactMatchMetric('expected_output'),
         ContainsMetric('must_include')
     ]
@@ -257,15 +261,15 @@ vizra eval run test_my_agent -v
 Train your agents with reinforcement learning:
 
 ```python
-from typing import Dict, Any
 from vizra.training import BaseRLTraining
 
 class MyTraining(BaseRLTraining):
     name: str = 'train_agent'
     agent_name: str = 'my_agent'
     csv_path: str = 'data/training.csv'
+    provider = None  # Optional: Use providers for real training
     
-    def calculate_reward(self, csv_row_data: Dict[str, Any], agent_response: str) -> float:
+    def calculate_reward(self, csv_row_data, agent_response):
         # Give partial rewards to guide learning
         expected = csv_row_data.get('expected_output', '')
         if expected in agent_response:
@@ -277,7 +281,7 @@ class MyTraining(BaseRLTraining):
         return 0.0  # Too short or wrong
 ```
 
-Run training locally or integrate with external RL providers like OpenPipe ART for production-grade training.
+Run training locally (placeholder mode) or add a `provider` like Verifiers for real weight updates. Integrate with external providers like OpenPipe ART for production-grade training.
 
 ## 📁 Project Structure
 
@@ -289,7 +293,7 @@ your-project/
 ├── data/            # CSV files for evaluation and training
 ├── evaluations/     # Evaluation class definitions
 ├── metrics/         # Custom metric implementations (optional)
-├── prompts/         # Markdown files with agent instructions
+├── prompts/         # Markdown files for agent instructions (use with instructions_file)
 ├── tools/           # Tool implementations
 ├── training/        # Training routine definitions
 ├── vizra_config.py  # Configuration file (optional)
@@ -306,16 +310,15 @@ your-project/
 For models that prefer XML:
 
 ```python
-from typing import Dict, Any
 from vizra import ToolInterface, AgentContext
 
 class XMLTool(ToolInterface):
     xml_tag: str = 'search'  # Enables <search>query</search>
     
-    def parse_xml_content(self, content: str) -> Dict[str, Any]:
+    def parse_xml_content(self, content):
         return {"query": content}
     
-    def execute(self, arguments: Dict[str, Any], context: AgentContext) -> str:
+    def execute(self, arguments, context):
         return f"Searched for: {arguments['query']}"
 ```
 
@@ -324,13 +327,12 @@ class XMLTool(ToolInterface):
 Create your own evaluation metrics:
 
 ```python
-from typing import Dict, Any
 from vizra.evaluation.metrics import BaseMetric
 
 class QualityMetric(BaseMetric):
     name: str = "quality_check"
     
-    def evaluate(self, row_data: Dict[str, Any], response: str) -> Dict[str, Any]:
+    def evaluate(self, row_data, response):
         score = calculate_quality_score(response)
         return {
             'passed': score > 0.8,
