@@ -272,7 +272,7 @@ class MyTraining(BaseRLTraining):
     # Optional: Use providers for real model weight updates
     provider = VerifiersProvider(
         model_name='my_finetuned_model',
-        base_model='gpt-4o-mini'
+        base_model='Qwen/Qwen2.5-0.5B-Instruct'
     )
     
     def calculate_reward(self, csv_row_data, agent_response):
