@@ -15,22 +15,7 @@
 
 ## 📚 Table of Contents
 
-- [🎯 Why Vizra?](#-why-vizra)
-- [🚀 Quick Start](#-quick-start)
-- [📖 Core Concepts](#-core-concepts)
-  - [Agents](#agents---just-python-classes)
-  - [Tools](#tools---give-your-agents-abilities)
-  - [Hooks](#hooks---customize-agent-behavior)
-- [🔥 Real Examples](#-real-examples)
-- [⚙️ Configuration](#️-configuration)
-- [🧪 Testing & Training](#-testing--training)
-  - [Evaluation](#evaluation)
-  - [Training](#training)
-- [📁 Project Structure](#-project-structure)
-- [🛠️ Advanced Features](#️-advanced-features)
-- [💻 CLI Reference](#-cli-reference)
-- [🤝 Support](#-support)
-- [📝 License](#-license)
+[Why Vizra?](#-why-vizra) • [Quick Start](#-quick-start) • [Core Concepts](#-core-concepts) • [Real Examples](#-real-examples) • [Configuration](#️-configuration) • [Testing & Training](#-testing--training) • [Project Structure](#-project-structure) • [Advanced Features](#️-advanced-features) • [CLI Reference](#-cli-reference) • [Support](#-support)
 
 ## 🎯 Why Vizra?
 
