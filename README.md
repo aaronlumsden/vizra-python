@@ -268,6 +268,7 @@ class MyTraining(BaseRLTraining):
     name: str = 'train_agent'
     agent_name: str = 'my_agent'
     csv_path: str = 'data/training.csv'
+    algorithm: str = 'grpo'  # Options: ppo, dpo, grpo, reinforce, etc.
     
     # Optional: Use providers for real model weight updates
     provider = VerifiersProvider(
@@ -287,7 +288,7 @@ class MyTraining(BaseRLTraining):
         return 0.0  # Too short or wrong
 ```
 
-Run training with `vizra train run train_agent`. Without a provider, it runs in placeholder mode. With VerifiersProvider, it performs real model weight updates using GRPO.
+Run training with `vizra train run train_agent`. Without a provider, it runs in placeholder mode. With VerifiersProvider, it performs real model weight updates.
 
 ## 📁 Project Structure
 
