@@ -1,12 +1,12 @@
 <div align="center">
-  <h1>🪶 Vizra</h1>
+  <p align="center">
+  <img src="https://vizra.ai/img/vizra-logo.svg" alt="Vizra Logo" width="200">
+</p>
   <p><strong>The lightweight AI agent framework that gets out of your way</strong></p>
   
   [![PyPI Version](https://img.shields.io/pypi/v/vizra?color=blue)](https://pypi.org/project/vizra/)
   [![Python Versions](https://img.shields.io/pypi/pyversions/vizra)](https://pypi.org/project/vizra/)
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-  [![Downloads](https://img.shields.io/pypi/dm/vizra)](https://pypi.org/project/vizra/)
-  [![GitHub Stars](https://img.shields.io/github/stars/yourusername/vizra?style=social)](https://github.com/yourusername/vizra)
 </div>
 
 ---
