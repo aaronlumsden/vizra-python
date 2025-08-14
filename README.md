@@ -15,11 +15,11 @@
 
 ## 🎯 Why Vizra?
 
-I built Vizra because I wanted an AI agent framework that felt like writing regular Python code. No massive learning curve, no heavy dependencies, just clean and simple.
+I built Vizra because I wanted an AI agent framework that was simple to understand and use. No complex abstractions, minimal dependencies, just straightforward and clean.
 
 > 🪶 **Lightweight** – Minimal dependencies, just litellm at its core  
 > 🎯 **Simple** – One base class, straightforward patterns  
-> 🐍 **Pythonic** – It feels like Python, not a framework  
+> 🐍 **Pythonic** – Follows Python conventions and patterns  
 > ⚡ **Fast Setup** – From install to working agent in under 30 seconds  
 > 🔧 **Flexible** – Add tools, hooks, context, or keep it minimal  
 > 📊 **Production Ready** – Built-in evaluation and training capabilities  
@@ -123,6 +123,12 @@ class MonitoredAgent(BaseAgent):
     
     def after_llm_response(self, response, messages):
         print(f"📥 Got response: {response.choices[0].message.content[:50]}...")
+    
+    def before_tool_call(self, tool_name, arguments, context):
+        print(f"🔧 Calling tool: {tool_name}")
+    
+    def after_tool_result(self, tool_name, result, context):
+        print(f"✅ Tool {tool_name} completed")
 ```
 
 ## 🧪 Evaluation & Testing
@@ -160,30 +166,36 @@ from vizra.training import BaseRLTraining
 class MyTraining(BaseRLTraining):
     name = 'train_agent'
     agent_name = 'my_agent'
-    csv_path = 'data/training_data.csv'
+    csv_path = 'data/training.csv'
     
-    def calculate_reward(self, csv_row_data: dict, agent_response: str):
-        expected = csv_row_data.get('expected', '')
-        return 1.0 if expected in agent_response else 0.0
+    def calculate_reward(self, csv_row_data, agent_response):
+        # Return 1.0 for good responses, 0.0 for bad
+        return 1.0 if "correct" in agent_response else 0.0
 ```
+
+Run training locally or integrate with external RL providers like OpenPipe ART for production-grade training.
 
 ## 💻 CLI Commands
 
 Vizra comes with a beautiful CLI powered by Rich:
 
-```bash
-# Check your setup
-vizra status
-
-# List what you can evaluate
-vizra eval list
-
-# Run an evaluation
-vizra eval run my_eval -v
-
-# Train an agent
-vizra train run my_training -i 100
-```
+| Command | Description | Options |
+|---------|-------------|---------|
+| **General** | | |
+| `vizra status` | Show installation status | |
+| `vizra --version` | Show version info | |
+| **Evaluation** | | |
+| `vizra eval list` | List available evaluations | |
+| `vizra eval run <name>` | Run an evaluation | `-v` (verbose)<br>`-l N` (limit test cases)<br>`-d` (detailed CSV)<br>`-j` (JSON output)<br>`-o FILE` (custom output) |
+| **Training** | | |
+| `vizra train list` | List training routines | |
+| `vizra train run <name>` | Run training | `-v` (verbose)<br>`-i N` (iterations)<br>`-t` (test mode)<br>`-o FILE` (save results) |
+| **Code Generation** | | |
+| `vizra make agent <name>` | Create new agent class | |
+| `vizra make tool <name>` | Create new tool class | |
+| `vizra make evaluation <name>` | Create new evaluation | |
+| `vizra make training <name>` | Create new training routine | |
+| `vizra make metric <name>` | Create custom metric | |
 
 ## 📁 Project Structure
 
@@ -191,13 +203,18 @@ Keep your project organized:
 
 ```
 your-project/
-├── agents/          # Your agent classes
-├── tools/           # Custom tools
-├── evaluations/     # Evaluation definitions
-├── training/        # Training routines
-├── data/           # CSV files for testing/training
-└── prompts/        # Markdown instruction files
+├── agents/          # Agent class definitions
+├── data/            # CSV files for evaluation and training
+├── evaluations/     # Evaluation class definitions
+├── metrics/         # Custom metric implementations (optional)
+├── prompts/         # Markdown files with agent instructions
+├── tools/           # Tool implementations
+├── training/        # Training routine definitions
+├── .env.example     # Environment variables template
+└── .gitignore       # Git ignore file
 ```
+
+**Important**: Create `__init__.py` files in all Python package directories (agents, tools, evaluations, training, metrics).
 
 ## 🔥 Real Examples
 
@@ -288,7 +305,6 @@ context = AgentContext()
 Built something cool with Vizra? I'd love to hear about it!
 
 - 🐛 **Issues**: [GitHub Issues](https://github.com/aaronlumsden/vizra-python/issues)
-- 💬 **Discussions**: [GitHub Discussions](https://github.com/aaronlumsden/vizra-python/discussions)
 - 🐦 **X**: [@aaronlumsden](https://x.com/aaronlumsden)
 
 ## 📝 License
@@ -298,6 +314,6 @@ MIT License - Use it however you want.
 ---
 
 <div align="center">
-  <p>Built with ❤️ by developers who just wanted a simple AI agent framework</p>
+  <p>Built with ❤️ for developers who want a simple AI agent framework</p>
   <p><a href="https://github.com/aaronlumsden/vizra-python">⭐ Star on GitHub</a> if you find it useful!</p>
 </div>
