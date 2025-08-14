@@ -262,12 +262,18 @@ Train your agents with reinforcement learning:
 
 ```python
 from vizra.training import BaseRLTraining
+from vizra.providers import VerifiersProvider
 
 class MyTraining(BaseRLTraining):
     name: str = 'train_agent'
     agent_name: str = 'my_agent'
     csv_path: str = 'data/training.csv'
-    provider = None  # Optional: Use providers for real training
+    
+    # Optional: Use providers for real model weight updates
+    provider = VerifiersProvider(
+        model_name='my_finetuned_model',
+        base_model='gpt-4o-mini'
+    )
     
     def calculate_reward(self, csv_row_data, agent_response):
         # Give partial rewards to guide learning
@@ -281,7 +287,7 @@ class MyTraining(BaseRLTraining):
         return 0.0  # Too short or wrong
 ```
 
-Run training locally (placeholder mode) or add a `provider` like Verifiers for real weight updates. Integrate with external providers like OpenPipe ART for production-grade training.
+Run training with `vizra train run train_agent`. Without a provider, it runs in placeholder mode. With VerifiersProvider, it performs real model weight updates using GRPO.
 
 ## 📁 Project Structure
 
