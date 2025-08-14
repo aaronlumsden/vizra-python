@@ -1,0 +1,100 @@
+"""
+Vizra Configuration File Example
+
+Copy this file to 'vizra_config.py' in your project root and customize as needed.
+You can add any configuration values you want - this is just a Python dictionary!
+"""
+
+import os
+
+settings = {
+    # LLM Configuration
+    'llm': {
+        'model': os.getenv('VIZRA_MODEL', 'gpt-4o'),
+        'temperature': 0.7,
+        'max_tokens': 2000,
+        'timeout': 30,
+        'max_retries': 3,
+    },
+    
+    # Agent Configuration
+    'agent': {
+        'max_tool_iterations': 3,
+        'default_model': 'gpt-4o',
+        'instructions_dir': './prompts',
+    },
+    
+    # Training Configuration
+    'training': {
+        'algorithm': 'ppo',
+        'batch_size': 32,
+        'learning_rate': 1e-4,
+        'n_iterations': 100,
+        'checkpoint_dir': './checkpoints',
+        'gradient_accumulation_steps': 1,
+        'gradient_checkpointing': True,
+    },
+    
+    # Evaluation Configuration
+    'evaluation': {
+        'batch_size': 16,
+        'results_dir': './evaluation_results',
+        'save_responses': True,
+    },
+    
+    # API Keys and Endpoints (using environment variables)
+    'api': {
+        'openai': {
+            'key': os.getenv('OPENAI_API_KEY'),
+            'base_url': os.getenv('OPENAI_BASE_URL'),  # Optional custom endpoint
+        },
+        # Add your own API configurations
+        'anthropic': {
+            'key': os.getenv('ANTHROPIC_API_KEY'),
+        },
+        'custom': {
+            'key': os.getenv('MY_CUSTOM_API_KEY'),
+            'endpoint': 'https://api.example.com/v1',
+        },
+    },
+    
+    # Provider-specific settings
+    'providers': {
+        'verifiers': {
+            'inference_url': os.getenv('VLLM_SERVER_URL', 'http://localhost:8000/v1'),
+            'model_path': './models',
+        },
+        # Add your own provider configurations
+    },
+    
+    # File paths
+    'paths': {
+        'data': './data',
+        'outputs': './outputs',
+        'logs': './logs',
+    },
+    
+    # Feature flags
+    'features': {
+        'verbose_logging': False,
+        'debug_mode': os.getenv('DEBUG', 'false').lower() == 'true',
+        'experimental': {
+            'new_algorithm': False,
+        },
+    },
+    
+    # Custom configurations - add anything you need!
+    'my_custom_config': {
+        'special_value': 42,
+        'nested': {
+            'deeply': {
+                'nested_value': 'Hello, World!',
+            },
+        },
+    },
+}
+
+# You can also define configuration programmatically
+if os.getenv('ENVIRONMENT') == 'production':
+    settings['llm']['temperature'] = 0.3  # More deterministic in production
+    settings['features']['debug_mode'] = False
