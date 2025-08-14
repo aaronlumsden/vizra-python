@@ -1,4 +1,5 @@
 import json
+from typing import Dict, Any
 from vizra import ToolInterface, AgentContext
 
 
@@ -6,7 +7,7 @@ class RefundProcessorTool(ToolInterface):
     """
     A tool to process refunds for orders.
     """
-    def definition(self) -> dict:
+    def definition(self) -> Dict[str, Any]:
         """
         Defines the tool's name, description, and required parameters.
         """
@@ -33,7 +34,7 @@ class RefundProcessorTool(ToolInterface):
             },
         }
 
-    def execute(self, arguments: dict, context: AgentContext) -> str:
+    def execute(self, arguments: Dict[str, Any], context: AgentContext) -> str:
         """
         Executes the refund processing logic.
 

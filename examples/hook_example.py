@@ -3,7 +3,8 @@ Example showing how to use hooks in agents for monitoring and logging.
 """
 
 import json
-from vizra import BaseAgent, AgentContext
+from typing import List, Dict, Any, Optional, Type
+from vizra import BaseAgent, AgentContext, ToolInterface
 from examples.tools.order_lookup import OrderLookupTool
 from examples.tools.refund_processor import RefundProcessorTool
 
@@ -12,23 +13,23 @@ class MonitoredSupportAgent(BaseAgent):
     """
     Example agent that uses hooks for monitoring and logging.
     """
-    name = 'monitored_support'
-    description = 'Customer support agent with monitoring hooks'
-    instructions = '''You are a friendly customer support assistant. 
+    name: str = 'monitored_support'
+    description: str = 'Customer support agent with monitoring hooks'
+    instructions: str = '''You are a friendly customer support assistant. 
     Always be helpful and provide accurate information.
     When customers ask about orders, use the order lookup tool.
     When customers request refunds, gather necessary information and process the refund.'''
-    model = 'gpt-4o'
-    tools = [OrderLookupTool, RefundProcessorTool]
+    model: str = 'gpt-4o'
+    tools: List[Type[ToolInterface]] = [OrderLookupTool, RefundProcessorTool]
     
-    def before_llm_call(self, messages, tools):
+    def before_llm_call(self, messages: List[Dict[str, Any]], tools: Optional[List[Dict[str, Any]]]) -> None:
         """Log before making an LLM call."""
         print(f"\n🔵 Making LLM call:")
         print(f"  - Messages: {len(messages)}")
         print(f"  - Tools available: {len(tools) if tools else 0}")
         print(f"  - Last message: {messages[-1]['content'][:50]}...")
     
-    def after_llm_response(self, response, messages):
+    def after_llm_response(self, response: Any, messages: List[Dict[str, Any]]) -> None:
         """Log after receiving LLM response."""
         print(f"\n🟢 LLM Response received:")
         # Track token usage if available
@@ -41,12 +42,12 @@ class MonitoredSupportAgent(BaseAgent):
         else:
             print(f"  - Response preview: {message.content[:100]}...")
     
-    def before_tool_call(self, tool_name, arguments, context):
+    def before_tool_call(self, tool_name: str, arguments: Dict[str, Any], context: AgentContext) -> None:
         """Log before executing a tool."""
         print(f"\n🔧 Executing tool: {tool_name}")
         print(f"  - Arguments: {json.dumps(arguments, indent=2)}")
     
-    def after_tool_result(self, tool_name, result, context):
+    def after_tool_result(self, tool_name: str, result: str, context: AgentContext) -> None:
         """Log after tool execution."""
         print(f"\n✅ Tool result from {tool_name}:")
         try:
@@ -61,13 +62,13 @@ class SecurityAuditAgent(BaseAgent):
     """
     Example agent that uses hooks for security auditing.
     """
-    name = 'security_audit'
-    description = 'Agent with security audit hooks'
-    instructions = 'You are a helpful assistant with security auditing enabled.'
-    model = 'gpt-4o'
-    tools = [OrderLookupTool, RefundProcessorTool]
+    name: str = 'security_audit'
+    description: str = 'Agent with security audit hooks'
+    instructions: str = 'You are a helpful assistant with security auditing enabled.'
+    model: str = 'gpt-4o'
+    tools: List[Type[ToolInterface]] = [OrderLookupTool, RefundProcessorTool]
     
-    def before_tool_call(self, tool_name, arguments, context):
+    def before_tool_call(self, tool_name: str, arguments: Dict[str, Any], context: AgentContext) -> None:
         """Audit tool calls for security purposes."""
         # Check for sensitive operations
         if tool_name == 'process_refund':
@@ -83,7 +84,7 @@ class SecurityAuditAgent(BaseAgent):
             # - Require additional authentication for large amounts
             # - Send alerts for suspicious activity
     
-    def after_llm_response(self, response, messages):
+    def after_llm_response(self, response: Any, messages: List[Dict[str, Any]]) -> None:
         """Check for potential data leaks in responses."""
         content = response.choices[0].message.content or ""
         

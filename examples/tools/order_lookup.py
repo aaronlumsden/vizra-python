@@ -1,4 +1,5 @@
 import json
+from typing import Dict, Any
 from vizra import ToolInterface, AgentContext
 
 
@@ -6,7 +7,7 @@ class OrderLookupTool(ToolInterface):
     """
     A tool to look up order information by order ID.
     """
-    def definition(self) -> dict:
+    def definition(self) -> Dict[str, Any]:
         """
         Defines the tool's name, description, and required parameters.
         """
@@ -25,7 +26,7 @@ class OrderLookupTool(ToolInterface):
             },
         }
 
-    def execute(self, arguments: dict, context: AgentContext) -> str:
+    def execute(self, arguments: Dict[str, Any], context: AgentContext) -> str:
         """
         Executes the tool logic to find and return order details.
 

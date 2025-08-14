@@ -1,4 +1,5 @@
-from vizra import BaseAgent
+from typing import List, Type
+from vizra import BaseAgent, ToolInterface
 from examples.tools.order_lookup import OrderLookupTool
 from examples.tools.refund_processor import RefundProcessorTool
 
@@ -12,7 +13,7 @@ class CustomerSupportAgent(BaseAgent):
     When customers request refunds, gather necessary information and process the refund.
     Be empathetic and professional in all interactions.'''
     model: str = 'gpt-4o'
-    tools: list = [
+    tools: List[Type[ToolInterface]] = [
         OrderLookupTool,
         RefundProcessorTool,
     ]

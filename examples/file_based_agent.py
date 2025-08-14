@@ -10,7 +10,8 @@ In your project, you might have a structure like:
     └── main.py
 """
 
-from vizra import BaseAgent
+from typing import List, Type
+from vizra import BaseAgent, ToolInterface
 from examples.tools.order_lookup import OrderLookupTool
 from examples.tools.refund_processor import RefundProcessorTool
 
@@ -19,18 +20,18 @@ class FileBasedSupportAgent(BaseAgent):
     """
     Example agent that loads instructions from a markdown file.
     """
-    name = 'file_based_support'
-    description = 'Customer support agent with file-based instructions'
+    name: str = 'file_based_support'
+    description: str = 'Customer support agent with file-based instructions'
     
     # Path relative to where the script is run
     # Users would typically use paths like:
     # - 'prompts/customer_support.md'
     # - './instructions/agent_prompt.md'
     # - '/absolute/path/to/prompt.md'
-    instructions_file = 'example_prompt.md'  # This would be in user's project
+    instructions_file: str = 'example_prompt.md'  # This would be in user's project
     
-    model = 'gpt-4o'
-    tools = [OrderLookupTool, RefundProcessorTool]
+    model: str = 'gpt-4o'
+    tools: List[Type[ToolInterface]] = [OrderLookupTool, RefundProcessorTool]
 
 
 # Example with inline instructions for comparison
@@ -38,15 +39,15 @@ class InlineSupportAgent(BaseAgent):
     """
     Traditional agent with inline instructions.
     """
-    name = 'inline_support'
-    description = 'Customer support agent with inline instructions'
-    instructions = """You are a friendly customer support assistant.
+    name: str = 'inline_support'
+    description: str = 'Customer support agent with inline instructions'
+    instructions: str = """You are a friendly customer support assistant.
 Always be helpful and provide accurate information.
 When customers ask about orders, use the order lookup tool.
 When customers request refunds, gather necessary information and process the refund.
 Be empathetic and professional in all interactions."""
-    model = 'gpt-4o'
-    tools = [OrderLookupTool, RefundProcessorTool]
+    model: str = 'gpt-4o'
+    tools: List[Type[ToolInterface]] = [OrderLookupTool, RefundProcessorTool]
 
 
 if __name__ == "__main__":
